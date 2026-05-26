@@ -170,6 +170,10 @@ function M.apply(config, user_opts)
     end
   end)
 
+  wezterm.on("gui-startup", function()
+    wezterm.plugin.update_all()
+  end)
+
   -- Derive status colors/icons from all registered agents (first wins), merged with user overrides.
   local agent_colors, agent_icons = {}, {}
   for _, impl in ipairs(agent.all()) do
