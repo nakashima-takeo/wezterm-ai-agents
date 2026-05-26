@@ -170,9 +170,7 @@ function M.apply(config, user_opts)
     end
   end)
 
-  wezterm.on("gui-startup", function()
-    wezterm.plugin.update_all()
-  end)
+  wezterm.on("gui-startup", function() wezterm.plugin.update_all() end)
 
   -- Derive status colors/icons from all registered agents (first wins), merged with user overrides.
   local agent_colors, agent_icons = {}, {}
@@ -187,10 +185,15 @@ function M.apply(config, user_opts)
   opts.ui.right_status.colors = merge(agent_colors, opts.ui.right_status.colors or {})
   opts.ui.right_status.icons = merge(agent_icons, opts.ui.right_status.icons or {})
 
+  local pin_icon_set = opts.nerd_font and builtin_icons.nerd or builtin_icons.unicode
+  opts.ui.right_status.pin_icon = opts.ui.right_status.pin_icon or pin_icon_set.pin
+  opts.ui.right_status.pin_color = opts.ui.right_status.pin_color or "#b4befe"
+
   local deps = {
     workspace = workspace,
     worktree = worktree,
     layout = layout,
+    selector = selector,
     agent = agent,
     ui = ui,
     opts = opts,
@@ -207,11 +210,17 @@ function M.apply(config, user_opts)
   if opts.install_ui_status then
     local last_status_tick = 0
     local last_sync_tick = 0
+    local prev_win_id = nil
     wezterm.on("update-status", function(window, pane)
       local now = os.time()
+      local win_id = tostring(window:window_id())
+      if prev_win_id and prev_win_id ~= win_id and selector.pinned_windows[prev_win_id] then
+        selector.pinned_windows[prev_win_id] = nil
+        selector.pinned_windows[win_id] = true
+      end
+      prev_win_id = win_id
       if (now - last_status_tick) >= opts.status_update_interval then
         last_status_tick = now
-        -- Per-agent UX hook: clear "done" indicator on the focused pane.
         local impl, agent_opts = agent.detect(pane, opts)
         if impl and impl.consume_done then pcall(impl.consume_done, pane, agent_opts) end
         local segs = ui.right_status_segments(window, pane, deps)

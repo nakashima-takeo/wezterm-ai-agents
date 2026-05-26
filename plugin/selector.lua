@@ -8,6 +8,8 @@ local act = wezterm.action
 
 local M = {}
 
+M.pinned_windows = {}
+
 -- ============== Helpers ==============
 
 local function get_cwd_path(pane)
@@ -844,19 +846,18 @@ function M.build_keybinds(deps)
   add("prev_tab", { key = "LeftArrow", mods = "CMD|SHIFT", action = act.ActivateTabRelative(-1) })
 
   -- Always-on-top toggle
-  local pinned_windows = {}
   add("pin_toggle", {
     key = "P",
     mods = "CMD|SHIFT",
     action = wezterm.action_callback(function(window, pane)
       local L = opts.labels
       local id = tostring(window:window_id())
-      if pinned_windows[id] then
-        pinned_windows[id] = nil
+      if M.pinned_windows[id] then
+        M.pinned_windows[id] = nil
         window:perform_action(act.SetWindowLevel("Normal"), pane)
         toast(window, L.pin_off, 2000)
       else
-        pinned_windows[id] = true
+        M.pinned_windows[id] = true
         window:perform_action(act.SetWindowLevel("AlwaysOnTop"), pane)
         toast(window, L.pin_on, 2000)
       end
