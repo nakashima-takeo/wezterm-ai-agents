@@ -18,6 +18,42 @@ end
 
 local function toast(window, msg, ms) window:toast_notification("WezTerm", msg, nil, ms or 3000) end
 
+local GUI_EDITORS = { "code", "cursor", "windsurf", "zed", "subl" }
+local gui_editor_set = {}
+for _, e in ipairs(GUI_EDITORS) do
+  gui_editor_set[e] = true
+end
+
+local function is_gui_editor(cmd)
+  if not cmd then return false end
+  local basename = cmd:match("([^/]+)$") or cmd
+  return gui_editor_set[basename] ~= nil
+end
+
+local cached_editor = nil
+local function detect_gui_editor(explicit)
+  if explicit then return explicit end
+  if cached_editor ~= nil then return cached_editor or nil end
+  for _, env in ipairs({ "VISUAL", "EDITOR" }) do
+    local val = os.getenv(env)
+    if is_gui_editor(val) then
+      cached_editor = val
+      return val
+    end
+  end
+  local query = "command -v " .. table.concat(GUI_EDITORS, " ") .. " 2>/dev/null | head -1"
+  local ok, stdout = wezterm.run_child_process({ "/bin/sh", "-lc", query })
+  if ok and stdout then
+    local path = stdout:match("(%S+)")
+    if path then
+      cached_editor = path
+      return path
+    end
+  end
+  cached_editor = false
+  return nil
+end
+
 local function build_ws_header(fmt, ws_name, is_running)
   if is_running then
     table.insert(fmt, { Foreground = { AnsiColor = "Green" } })
@@ -347,7 +383,7 @@ local function open_agent_tab_in_cwd(window, pane, cwd, agent_impl, deps)
   end
 end
 
-local function show_worktree_action_menu(window, pane, wt_path, branch, is_main, base_ws, git_root, cwd_path, deps)
+local function show_worktree_action_menu(window, pane, wt_path, branch, is_main, base_ws, git_root, cwd_path, deps, pending)
   local L = deps.opts.labels
   local choices = {}
   local agents = deps.agent.all()
@@ -359,12 +395,17 @@ local function show_worktree_action_menu(window, pane, wt_path, branch, is_main,
   end
 
   local ws_name = deps.worktree.workspace_name_for(base_ws, branch, is_main)
-  local in_wt = cwd_path == wt_path or (cwd_path and cwd_path:find(wt_path .. "/", 1, true))
-  local has_other = not deps.workspace.exists(ws_name) or (not is_main and not in_wt)
-  if has_other then
+  if pending then
     table.insert(choices, { id = "_sep_other", label = "── Manage ──" })
-    if not deps.workspace.exists(ws_name) then table.insert(choices, { id = "workspace", label = L.register_ws }) end
-    if not is_main and not in_wt then table.insert(choices, { id = "delete", label = L.delete_wt }) end
+    table.insert(choices, { id = "workspace", label = L.register_ws })
+  else
+    local in_wt = cwd_path == wt_path or (cwd_path and cwd_path:find(wt_path .. "/", 1, true))
+    local has_other = not deps.workspace.exists(ws_name) or (not is_main and not in_wt)
+    if has_other then
+      table.insert(choices, { id = "_sep_other", label = "── Manage ──" })
+      if not deps.workspace.exists(ws_name) then table.insert(choices, { id = "workspace", label = L.register_ws }) end
+      if not is_main and not in_wt then table.insert(choices, { id = "delete", label = L.delete_wt }) end
+    end
   end
 
   window:perform_action(
@@ -373,7 +414,11 @@ local function show_worktree_action_menu(window, pane, wt_path, branch, is_main,
       choices = choices,
       fuzzy = true,
       action = wezterm.action_callback(function(iw, ip, id)
-        if not id then return end
+        if not id or id:match("^_sep_") then return end
+        if pending then
+          wt_path = create_worktree(iw, git_root, pending.branch, pending.is_new, pending.local_name, deps)
+          if not wt_path then return end
+        end
         if id:match("^tab:") then
           local agent_id = id:match("^tab:(.+)$")
           local agent_impl = nil
@@ -493,16 +538,36 @@ function M.worktree_selector(window, pane, deps)
         if id:match("^auto_create:") then
           local ref, local_name = id:match("^auto_create:(.+):([^:]+)$")
           if ref and local_name then
-            local wt_path = create_worktree(iw, git_root, ref, false, local_name, deps)
-            if wt_path then show_worktree_action_menu(iw, ip, wt_path, local_name, false, base_ws, git_root, cwd_path, deps) end
+            show_worktree_action_menu(
+              iw,
+              ip,
+              nil,
+              local_name,
+              false,
+              base_ws,
+              git_root,
+              cwd_path,
+              deps,
+              { branch = ref, local_name = local_name, is_new = false }
+            )
           end
           return
         end
 
         if id == "tmp_create" then
           local tmp_branch = deps.worktree.generate_tmp_branch_name(current_branch)
-          local wt_path = create_worktree(iw, git_root, tmp_branch, true, nil, deps)
-          if wt_path then show_worktree_action_menu(iw, ip, wt_path, tmp_branch, false, base_ws, git_root, cwd_path, deps) end
+          show_worktree_action_menu(
+            iw,
+            ip,
+            nil,
+            tmp_branch,
+            false,
+            base_ws,
+            git_root,
+            cwd_path,
+            deps,
+            { branch = tmp_branch, local_name = nil, is_new = true }
+          )
           return
         end
 
@@ -663,6 +728,25 @@ function M.build_keybinds(deps)
     key = "A",
     mods = "CMD|SHIFT",
     action = wezterm.action_callback(function(window, pane) M.agent_selector(window, pane, deps) end),
+  })
+
+  -- Open editor
+  add("open_editor", {
+    key = "E",
+    mods = "CMD|SHIFT",
+    action = wezterm.action_callback(function(window, pane)
+      local editor = detect_gui_editor(opts.default_editor)
+      if not editor then
+        toast(window, opts.labels.no_editor_found)
+        return
+      end
+      local cwd = get_cwd_path(pane)
+      if not cwd then
+        toast(window, opts.labels.cannot_get_cwd)
+        return
+      end
+      wezterm.background_child_process({ editor, cwd })
+    end),
   })
 
   -- Tab management with workspace sync
