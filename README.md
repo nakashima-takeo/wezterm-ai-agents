@@ -22,6 +22,7 @@
 macOS / Linux。Windows は非対応。
 
 - WezTerm nightly（20230712 以降推奨、plugin API 使用のため）
+- [Nerd Font](https://www.nerdfonts.com/)（ステータスアイコン表示に必要。未導入の場合は `nerd_font = false` で Unicode フォールバックに切替可能）
 - git 2.7+（`git worktree list --porcelain` に必要）
 - bash（hooks スクリプト実行用）
 - 使用するエージェントの CLI が PATH に存在すること
@@ -182,6 +183,7 @@ ai.apply(config, {
 
 ```lua
 ai.apply(config, {
+  nerd_font = true,                 -- Nerd Font アイコンを使用。false で Unicode フォールバック
   enabled_agents = nil,             -- nil = all; or { "claude", "codex" }
   default_agent = nil,              -- nil = first registered; or "claude"
   default_editor = nil,             -- nil = auto-detect (code/cursor/windsurf/zed/subl); or "/usr/local/bin/cursor" etc.
@@ -226,8 +228,7 @@ ai.apply(config, {
 return {
   id = "myagent",
   display_name = "...",
-  icons  = { working = "...", waiting = "...", done = "...", idle = "..." },
-  colors = { ... },
+  colors = { working = "...", waiting = "...", done = "...", idle = "..." },
   detect(pane, opts)    -> bool,
   state(pane, opts)     -> "working" | "waiting" | "done" | "idle" | "error",
   session_id(pane, opts) -> string|nil,

@@ -70,7 +70,7 @@ local default_opts = {
     path = "sibling", -- "sibling" | "subdirectory" | custom template with {git_root}, {parent}, {repo}, {branch}
   },
 
-  nerd_font = false,
+  nerd_font = true,
   status_dir = os.getenv("TMPDIR") or "/tmp",
   enabled_agents = nil, -- nil = all; or { "claude" } to register only specific agents
   default_agent = nil, -- nil = first registered; or "claude" to set default agent for Cmd+Shift+C

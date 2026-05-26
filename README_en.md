@@ -22,6 +22,7 @@ Persistent workspaces, git worktree integration, and agent state visualization.
 macOS / Linux. Windows is not supported.
 
 - WezTerm nightly (20230712+ recommended for plugin API)
+- [Nerd Font](https://www.nerdfonts.com/) (required for status icons. Set `nerd_font = false` for Unicode fallback if not installed)
 - git 2.7+ (required for `git worktree list --porcelain`)
 - bash (for hooks scripts)
 - Agent CLIs must be in PATH
@@ -182,6 +183,7 @@ ai.apply(config, {
 
 ```lua
 ai.apply(config, {
+  nerd_font = true,                 -- Use Nerd Font icons. Set false for Unicode fallback
   enabled_agents = nil,             -- nil = all; or { "claude", "codex" }
   default_agent = nil,              -- nil = first registered; or "claude"
   default_editor = nil,             -- nil = auto-detect (code/cursor/windsurf/zed/subl); or "/usr/local/bin/cursor" etc.
@@ -226,8 +228,7 @@ Implement the interface defined in `plugin/agent.lua` in `plugin/agents/<id>.lua
 return {
   id = "myagent",
   display_name = "...",
-  icons  = { working = "...", waiting = "...", done = "...", idle = "..." },
-  colors = { ... },
+  colors = { working = "...", waiting = "...", done = "...", idle = "..." },
   detect(pane, opts)    -> bool,
   state(pane, opts)     -> "working" | "waiting" | "done" | "idle" | "error",
   session_id(pane, opts) -> string|nil,

@@ -1,6 +1,6 @@
 local unicode = {
   working = "●",
-  waiting = "⏸",
+  waiting = "◎",
   done = "✔",
   idle = "○",
   unknown = "◌",
