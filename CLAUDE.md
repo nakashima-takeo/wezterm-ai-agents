@@ -35,6 +35,7 @@ init.lua (エントリポイント、apply() で全体を接続)
 ├── layout.lua     — ペイン分割レイアウトのスナップショット/復元
 ├── selector.lua   — InputSelector ベースの UI + キーバインド登録
 ├── labels.lua     — i18n ラベル (en/ja)
+├── icons.lua      — アイコンセット (unicode / nerd)、opts.nerd_font で切替
 ├── agent.lua      — エージェントレジストリ、検出、状態集約、JSON リーダー
 │   ├── agents/claude.lua  — Claude Code
 │   ├── agents/codex.lua   — OpenAI Codex CLI

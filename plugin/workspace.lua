@@ -134,7 +134,7 @@ end
 -- Requires injected `agent` and `layout` modules to break cyclic loads.
 function M.snapshot_tabs(window, agent_mod, layout_mod, plugin_opts)
   local tabs = {}
-  for _, tab in ipairs(window:mux_window():tabs()) do
+  for _, tab in ipairs(window:tabs()) do
     local entry = {}
     local impl, agent_opts, pane = agent_mod.find_in_tab(tab, plugin_opts)
     if impl then

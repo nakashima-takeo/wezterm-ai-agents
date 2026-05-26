@@ -127,7 +127,15 @@ function M.workspace_selector(window, pane, deps)
   local choices = {}
   local sorted = deps.workspace.sort(data.workspaces, default_ws)
 
-  -- Unregistered running workspaces (insert first)
+  for _, ws in ipairs(sorted) do
+    local is_running = existing[ws.name] or false
+    local fmt = {}
+    build_ws_header(fmt, ws.name, is_running)
+    append_ws_status(fmt, ws, is_running, deps)
+    table.insert(choices, { id = "ws:" .. ws.name, label = wezterm.format(fmt) })
+  end
+
+  -- Unregistered running workspaces (default at top, others at bottom)
   local unregistered = {}
   for name, _ in pairs(existing) do
     if not deps.workspace.find(data, name) then table.insert(unregistered, name) end
@@ -146,14 +154,6 @@ function M.workspace_selector(window, pane, deps)
     else
       table.insert(choices, entry)
     end
-  end
-
-  for _, ws in ipairs(sorted) do
-    local is_running = existing[ws.name] or false
-    local fmt = {}
-    build_ws_header(fmt, ws.name, is_running)
-    append_ws_status(fmt, ws, is_running, deps)
-    table.insert(choices, { id = "ws:" .. ws.name, label = wezterm.format(fmt) })
   end
 
   -- Actions section
@@ -304,12 +304,21 @@ function M.workspace_delete(window, pane, deps)
               local removed_wt = false
               local is_wt = false
               if target_cwd then
+                target_cwd = target_cwd:gsub("/$", "")
                 local git_root = deps.worktree.get_git_root(target_cwd)
                 if git_root and git_root ~= target_cwd then
-                  is_wt = true
-                  local ok = deps.worktree.remove(git_root, target_cwd, false)
-                  if not ok then ok = deps.worktree.remove(git_root, target_cwd, true) end
-                  removed_wt = ok
+                  local worktrees = deps.worktree.list(git_root)
+                  for _, wt in ipairs(worktrees) do
+                    if wt.path == target_cwd then
+                      is_wt = true
+                      break
+                    end
+                  end
+                  if is_wt then
+                    local ok = deps.worktree.remove(git_root, target_cwd, false)
+                    if not ok then ok = deps.worktree.remove(git_root, target_cwd, true) end
+                    removed_wt = ok
+                  end
                 end
               end
 
@@ -805,6 +814,52 @@ function M.build_keybinds(deps)
     action = wezterm.action_callback(function(window, pane)
       deps.layout.add_split(window, pane, "bottom", deps.workspace, opts)
       window:perform_action(act.SplitVertical({ domain = "CurrentPaneDomain" }), pane)
+    end),
+  })
+
+  -- Disable CMD+Q (accidental quit prevention)
+  add("disable_quit", { key = "q", mods = "CMD", action = act.Nop })
+
+  -- OPT+Enter passthrough
+  add("opt_enter", { key = "Enter", mods = "OPT", action = act.SendKey({ key = "Enter", mods = "OPT" }) })
+
+  -- Pane navigation
+  add("activate_pane_left", { key = "LeftArrow", mods = "CMD|OPT", action = act.ActivatePaneDirection("Left") })
+  add("activate_pane_right", { key = "RightArrow", mods = "CMD|OPT", action = act.ActivatePaneDirection("Right") })
+  add("activate_pane_up", { key = "UpArrow", mods = "CMD|OPT", action = act.ActivatePaneDirection("Up") })
+  add("activate_pane_down", { key = "DownArrow", mods = "CMD|OPT", action = act.ActivatePaneDirection("Down") })
+
+  -- Scroll
+  add("scroll_to_top", { key = "UpArrow", mods = "CMD", action = act.ScrollToTop })
+  add("scroll_to_bottom", { key = "DownArrow", mods = "CMD", action = act.ScrollToBottom })
+  add("scroll_page_up", { key = "UpArrow", mods = "OPT", action = act.ScrollByPage(-1) })
+  add("scroll_page_down", { key = "DownArrow", mods = "OPT", action = act.ScrollByPage(1) })
+
+  -- Line start / end
+  add("line_start", { key = "LeftArrow", mods = "CMD", action = act.SendKey({ key = "a", mods = "CTRL" }) })
+  add("line_end", { key = "RightArrow", mods = "CMD", action = act.SendKey({ key = "e", mods = "CTRL" }) })
+
+  -- Tab navigation
+  add("next_tab", { key = "RightArrow", mods = "CMD|SHIFT", action = act.ActivateTabRelative(1) })
+  add("prev_tab", { key = "LeftArrow", mods = "CMD|SHIFT", action = act.ActivateTabRelative(-1) })
+
+  -- Always-on-top toggle
+  local pinned_windows = {}
+  add("pin_toggle", {
+    key = "P",
+    mods = "CMD|SHIFT",
+    action = wezterm.action_callback(function(window, pane)
+      local L = opts.labels
+      local id = tostring(window:window_id())
+      if pinned_windows[id] then
+        pinned_windows[id] = nil
+        window:perform_action(act.SetWindowLevel("Normal"), pane)
+        toast(window, L.pin_off, 2000)
+      else
+        pinned_windows[id] = true
+        window:perform_action(act.SetWindowLevel("AlwaysOnTop"), pane)
+        toast(window, L.pin_on, 2000)
+      end
     end),
   })
 

@@ -33,6 +33,8 @@ local en = {
   ws_action_new = "new: Register workspace",
   ws_action_delete = "delete: Remove workspace",
   no_editor_found = "No GUI editor found (code/cursor/windsurf/zed/subl). Set opts.default_editor",
+  pin_on = "Pinned to front",
+  pin_off = "Unpinned",
 }
 
 local ja = {
@@ -70,6 +72,8 @@ local ja = {
   ws_action_new = "new: ワークスペースを登録",
   ws_action_delete = "delete: ワークスペースを削除",
   no_editor_found = "GUIエディターが見つかりません (code/cursor/windsurf/zed/subl)。opts.default_editor を設定してください",
+  pin_on = "常に前面に固定",
+  pin_off = "固定を解除",
 }
 
 return { en = en, ja = ja }

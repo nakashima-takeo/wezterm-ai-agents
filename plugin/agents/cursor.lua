@@ -9,7 +9,6 @@ local M = {}
 M.id = "cursor"
 M.display_name = "Cursor Agent"
 M.default_state = "unknown"
-M.icons = { unknown = "\xF3\xB0\x8A\xA0", waiting = "\xEF\x81\x99", done = "\xF3\xB0\x82\x9A", idle = "\xF3\xB0\x92\xB2" }
 M.colors = {
   unknown = "#6c7086",
   waiting = "#f38ba8",
