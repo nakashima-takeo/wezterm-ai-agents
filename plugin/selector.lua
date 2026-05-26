@@ -347,7 +347,7 @@ local function open_agent_tab_in_cwd(window, pane, cwd, agent_impl, deps)
   end
 end
 
-local function show_worktree_action_menu(window, pane, wt_path, branch, is_main, base_ws, git_root, cwd_path, deps)
+local function show_worktree_action_menu(window, pane, wt_path, branch, is_main, base_ws, git_root, cwd_path, deps, pending)
   local L = deps.opts.labels
   local choices = {}
   local agents = deps.agent.all()
@@ -359,12 +359,17 @@ local function show_worktree_action_menu(window, pane, wt_path, branch, is_main,
   end
 
   local ws_name = deps.worktree.workspace_name_for(base_ws, branch, is_main)
-  local in_wt = cwd_path == wt_path or (cwd_path and cwd_path:find(wt_path .. "/", 1, true))
-  local has_other = not deps.workspace.exists(ws_name) or (not is_main and not in_wt)
-  if has_other then
+  if pending then
     table.insert(choices, { id = "_sep_other", label = "── Manage ──" })
-    if not deps.workspace.exists(ws_name) then table.insert(choices, { id = "workspace", label = L.register_ws }) end
-    if not is_main and not in_wt then table.insert(choices, { id = "delete", label = L.delete_wt }) end
+    table.insert(choices, { id = "workspace", label = L.register_ws })
+  else
+    local in_wt = cwd_path == wt_path or (cwd_path and cwd_path:find(wt_path .. "/", 1, true))
+    local has_other = not deps.workspace.exists(ws_name) or (not is_main and not in_wt)
+    if has_other then
+      table.insert(choices, { id = "_sep_other", label = "── Manage ──" })
+      if not deps.workspace.exists(ws_name) then table.insert(choices, { id = "workspace", label = L.register_ws }) end
+      if not is_main and not in_wt then table.insert(choices, { id = "delete", label = L.delete_wt }) end
+    end
   end
 
   window:perform_action(
@@ -373,7 +378,11 @@ local function show_worktree_action_menu(window, pane, wt_path, branch, is_main,
       choices = choices,
       fuzzy = true,
       action = wezterm.action_callback(function(iw, ip, id)
-        if not id then return end
+        if not id or id:match("^_sep_") then return end
+        if pending then
+          wt_path = create_worktree(iw, git_root, pending.branch, pending.is_new, pending.local_name, deps)
+          if not wt_path then return end
+        end
         if id:match("^tab:") then
           local agent_id = id:match("^tab:(.+)$")
           local agent_impl = nil
@@ -493,16 +502,36 @@ function M.worktree_selector(window, pane, deps)
         if id:match("^auto_create:") then
           local ref, local_name = id:match("^auto_create:(.+):([^:]+)$")
           if ref and local_name then
-            local wt_path = create_worktree(iw, git_root, ref, false, local_name, deps)
-            if wt_path then show_worktree_action_menu(iw, ip, wt_path, local_name, false, base_ws, git_root, cwd_path, deps) end
+            show_worktree_action_menu(
+              iw,
+              ip,
+              nil,
+              local_name,
+              false,
+              base_ws,
+              git_root,
+              cwd_path,
+              deps,
+              { branch = ref, local_name = local_name, is_new = false }
+            )
           end
           return
         end
 
         if id == "tmp_create" then
           local tmp_branch = deps.worktree.generate_tmp_branch_name(current_branch)
-          local wt_path = create_worktree(iw, git_root, tmp_branch, true, nil, deps)
-          if wt_path then show_worktree_action_menu(iw, ip, wt_path, tmp_branch, false, base_ws, git_root, cwd_path, deps) end
+          show_worktree_action_menu(
+            iw,
+            ip,
+            nil,
+            tmp_branch,
+            false,
+            base_ws,
+            git_root,
+            cwd_path,
+            deps,
+            { branch = tmp_branch, local_name = nil, is_new = true }
+          )
           return
         end
 

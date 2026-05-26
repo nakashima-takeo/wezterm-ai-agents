@@ -131,6 +131,8 @@ function M.add(git_root, branch, local_name, is_new_branch, opts)
   local ok, _, stderr
   if is_new_branch then
     ok, _, stderr = wezterm.run_child_process({ "git", "-C", git_root, "worktree", "add", "-b", branch, wt_path })
+  elseif local_name and local_name ~= branch then
+    ok, _, stderr = wezterm.run_child_process({ "git", "-C", git_root, "worktree", "add", "-b", local_name, wt_path, branch })
   else
     ok, _, stderr = wezterm.run_child_process({ "git", "-C", git_root, "worktree", "add", wt_path, branch })
   end
