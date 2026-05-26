@@ -44,7 +44,6 @@ init.lua (エントリポイント、apply() で全体を接続)
 ```
 
 **主要パターン:**
-- モジュールは `dofile()` でロード (`require()` 不可 — WezTerm サンドボックスの制約)
 - エージェント状態は hooks が pane ごとに JSON ファイルを書き込む push 方式: `/tmp/wezterm-agent-<pane_id>`
 - `hooks/agent_status.sh` が書き込み側 (全エージェント共通)。Lua 側は `wezterm.json_parse()` で読み取り
 - JSON 形式: `{"agent":"<id>","state":"<state>","ts":<unix>,"session_id":"<sid>"}`
