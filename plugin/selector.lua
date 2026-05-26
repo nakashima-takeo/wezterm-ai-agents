@@ -665,6 +665,26 @@ function M.build_keybinds(deps)
     action = wezterm.action_callback(function(window, pane) M.agent_selector(window, pane, deps) end),
   })
 
+  -- Open editor
+  add("open_editor", {
+    key = "E",
+    mods = "CMD|SHIFT",
+    action = wezterm.action_callback(function(window, pane)
+      local L = opts.labels
+      local editor = opts.default_editor or os.getenv("VISUAL") or os.getenv("EDITOR")
+      if not editor then
+        toast(window, L.no_editor_found)
+        return
+      end
+      local cwd = get_cwd_path(pane)
+      if not cwd then
+        toast(window, L.cannot_get_cwd)
+        return
+      end
+      wezterm.background_child_process({ editor, cwd })
+    end),
+  })
+
   -- Tab management with workspace sync
   add("new_tab", {
     key = "t",
