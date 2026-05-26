@@ -161,9 +161,6 @@ Modifier keys are auto-detected by platform (macOS: `Cmd`, Linux: `Ctrl`). Overr
 | Key | ID | Action |
 |-----|-----|--------|
 | `Mod+Shift+S` | `workspace_selector` | Select / switch workspace |
-| `Mod+Shift+N` | `workspace_register` | Register current cwd as workspace |
-| `Mod+Shift+U` | `workspace_update` | Update workspace with current layout |
-| `Mod+Shift+D` | `workspace_delete` | Delete workspace |
 | `Mod+Shift+X` | `worktree_selector` | Worktree management (create/switch/delete) |
 | `Mod+Shift+C` | `agent_spawn` | Spawn default agent in a new tab |
 | `Mod+Shift+A` | `agent_selector` | Agent selection UI |
