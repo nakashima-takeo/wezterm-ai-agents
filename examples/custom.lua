@@ -62,8 +62,8 @@ ai.apply(config, {
 
   -- How often (seconds) the right status bar refreshes agent states.
   status_update_interval = 2,
-  -- How often (seconds) session IDs are synced to the workspace JSON.
-  session_sync_interval = 60,
+  -- How often (seconds) workspace state (tabs, agents, layouts) is synced to JSON.
+  session_sync_interval = 10,
 })
 
 return config

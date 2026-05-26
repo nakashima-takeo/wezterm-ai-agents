@@ -51,8 +51,29 @@ local function append_agents_colored(fmt, deps, ws_name)
   return any
 end
 
+local function append_ws_status(fmt, ws, is_running, deps)
+  if is_running then
+    append_agents_colored(fmt, deps, ws.name)
+  else
+    local saved = deps.workspace.count_saved_sessions(ws)
+    if saved > 0 then
+      local idle_icon = deps.opts.ui.right_status.icons.idle or ""
+      table.insert(fmt, { Foreground = { AnsiColor = "Grey" } })
+      table.insert(fmt, { Text = "  " .. idle_icon .. " \xC3\x97" .. saved })
+    end
+  end
+end
+
+local function shorten_path(path)
+  local home = wezterm.home_dir
+  if path == home or path:sub(1, #home + 1) == home .. "/" then return "~" .. path:sub(#home + 1) end
+  return path
+end
+
 M.append_agents_colored = append_agents_colored
+M.append_ws_status = append_ws_status
 M.build_ws_header = build_ws_header
+M.shorten_path = shorten_path
 
 -- ============== Workspace selector (Cmd+Shift+S) ==============
 
@@ -95,23 +116,13 @@ function M.workspace_selector(window, pane, deps)
     local is_running = existing[ws.name] or false
     local fmt = {}
     build_ws_header(fmt, ws.name, is_running)
-    if is_running then
-      append_agents_colored(fmt, deps, ws.name)
-    else
-      local saved = deps.workspace.count_saved_sessions(ws)
-      if saved > 0 then
-        local idle_icon = deps.opts.ui.right_status.icons.idle or ""
-        table.insert(fmt, { Foreground = { AnsiColor = "Grey" } })
-        table.insert(fmt, { Text = "  " .. idle_icon .. " \xC3\x97" .. saved })
-      end
-    end
+    append_ws_status(fmt, ws, is_running, deps)
     table.insert(choices, { id = "ws:" .. ws.name, label = wezterm.format(fmt) })
   end
 
   -- Actions section
   table.insert(choices, { id = "_sep_actions", label = "── Actions ──" })
   table.insert(choices, { id = "action:new", label = L.ws_action_new })
-  table.insert(choices, { id = "action:update", label = L.ws_action_update })
   if #data.workspaces > 0 then table.insert(choices, { id = "action:delete", label = L.ws_action_delete }) end
 
   window:perform_action(
@@ -125,10 +136,6 @@ function M.workspace_selector(window, pane, deps)
 
         if id == "action:new" then
           M.workspace_register(iw, ip, deps)
-          return
-        end
-        if id == "action:update" then
-          M.workspace_update(iw, ip, deps)
           return
         end
         if id == "action:delete" then
@@ -199,31 +206,7 @@ function M.workspace_register(window, pane, deps)
   )
 end
 
--- ============== Workspace update (Cmd+Shift+U) ==============
-
-function M.workspace_update(window, pane, deps)
-  local opts = deps.opts
-  local L = opts.labels
-  local ws_name = window:active_workspace()
-  local data = deps.workspace.read(opts.workspace)
-  local ws = deps.workspace.find(data, ws_name)
-  if not ws then
-    toast(window, string.format(L.ws_not_registered, ws_name))
-    return
-  end
-  local cwd_path = get_cwd_path(pane)
-  if not cwd_path then
-    toast(window, L.cannot_get_cwd)
-    return
-  end
-
-  ws.cwd = cwd_path
-  ws.tabs = deps.workspace.snapshot_tabs(window, deps.agent, deps.layout, opts)
-  deps.workspace.write(opts.workspace, data)
-  toast(window, string.format(L.ws_updated, ws_name))
-end
-
--- ============== Workspace delete (Cmd+Shift+D) ==============
+-- ============== Workspace delete ==============
 
 function M.workspace_delete(window, pane, deps)
   local opts = deps.opts
@@ -240,23 +223,19 @@ function M.workspace_delete(window, pane, deps)
     running[win:get_workspace()] = true
   end
 
-  local sorted = {}
-  for _, ws in ipairs(data.workspaces) do
-    table.insert(sorted, ws)
-  end
-  table.sort(sorted, function(a, b) return a.name < b.name end)
+  local default_ws = opts.workspace.default_workspace
+  local sorted = deps.workspace.sort(data.workspaces, default_ws)
 
   local choices = {}
-  local home = wezterm.home_dir
   for _, ws in ipairs(sorted) do
     if ws.name ~= active_ws then
-      local parts = {}
-      build_ws_header(parts, ws.name, running[ws.name] or false)
-      local short_cwd = ws.cwd or ""
-      if short_cwd == home or short_cwd:sub(1, #home + 1) == home .. "/" then short_cwd = "~" .. short_cwd:sub(#home + 1) end
-      table.insert(parts, { Foreground = { AnsiColor = "Grey" } })
-      table.insert(parts, { Text = "  " .. short_cwd })
-      table.insert(choices, { id = ws.name, label = wezterm.format(parts) })
+      local is_running = running[ws.name] or false
+      local fmt = {}
+      build_ws_header(fmt, ws.name, is_running)
+      append_ws_status(fmt, ws, is_running, deps)
+      table.insert(fmt, { Foreground = { AnsiColor = "Grey" } })
+      table.insert(fmt, { Text = "  " .. shorten_path(ws.cwd or "") })
+      table.insert(choices, { id = ws.name, label = wezterm.format(fmt) })
     end
   end
 

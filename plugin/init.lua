@@ -101,7 +101,7 @@ local default_opts = {
   locale = (os.getenv("LANG") or ""):sub(1, 2) == "ja" and "ja" or "en",
 
   status_update_interval = 1, -- right-status refresh (sec)
-  session_sync_interval = 30, -- workspace JSON session_id sync (sec)
+  session_sync_interval = 5, -- workspace full snapshot sync (sec)
 
   right_status_extra = nil, -- function(window, pane, deps) -> segments
 }
@@ -206,7 +206,7 @@ function M.apply(config, user_opts)
       end
       if (now - last_sync_tick) >= opts.session_sync_interval then
         last_sync_tick = now
-        pcall(workspace.sync_session_ids, opts.workspace, agent, opts)
+        pcall(workspace.sync_all, opts.workspace, agent, layout, opts)
       end
     end)
   end
