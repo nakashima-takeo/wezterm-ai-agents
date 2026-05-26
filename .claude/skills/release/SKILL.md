@@ -1,9 +1,9 @@
 ---
 name: release
-description: wezterm-ai-agents のリリースを実行する。dev → main マージ、タグ打ち、GitHub Release 検証まで自動で行う。
+description: wezterm-ai-agents のリリースを実行する。dev → main マージ、タグ打ち、GitHub Release 作成まで行う。
 argument-hint: v0.2.0
 disable-model-invocation: true
-allowed-tools: Bash,Read
+allowed-tools: Bash,Read,AskUserQuestion
 ---
 
 dev ブランチから main へのマージ・タグ・リリースを実行する。引数にバージョン番号（`v0.2.0` 形式）を取る。
@@ -55,17 +55,27 @@ git tag $VERSION origin/main
 git push origin $VERSION
 ```
 
-## 7. リリース検証
+## 7. リリースノート作成
+
+過去のリリースノートとコミットログを取得する。
 
 ```bash
-gh run list --limit 1
-gh run watch <run_id>
-gh release view $VERSION
+gh release list --limit 3
+gh release view <直近リリース>
+git log <前回タグ>..origin/main --oneline --no-merges
 ```
 
-Release ワークフローが成功し、リリースが作成されたことを確認する。失敗した場合は報告して終了。
+過去のリリースノートのフォーマット・粒度・文体を踏襲し、コミット一覧から利用者向けのリリースノート（Markdown）を作成する。コミットメッセージの転記ではなく、利用者が理解できる表現に書き換える。
 
-## 8. dev 同期
+AskUserQuestion でリリースノートの内容を提示し、確認を取る。修正指示があれば反映する。
+
+## 8. GitHub Release 作成
+
+```bash
+gh release create $VERSION --title "$VERSION" --notes "$RELEASE_NOTES"
+```
+
+## 9. dev 同期
 
 ```bash
 git checkout dev
@@ -73,6 +83,6 @@ git merge origin/main --no-edit
 git push origin dev
 ```
 
-## 9. 完了報告
+## 10. 完了報告
 
 リリース URL (`https://github.com/nakashima-takeo/wezterm-ai-agents/releases/tag/$VERSION`) を返して終了。
