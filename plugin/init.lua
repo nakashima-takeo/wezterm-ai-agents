@@ -155,6 +155,7 @@ function M.apply(config, user_opts)
 
   opts.labels = merge(builtin_labels[opts.locale] or builtin_labels.en, opts.labels or {})
   M.hooks_dir = plugin_dir .. "/hooks"
+  wezterm.log_info("wezterm-ai-agents: hooks_dir = " .. M.hooks_dir)
 
   wezterm.on("mux-startup", function()
     for _, impl in ipairs(agent.all()) do

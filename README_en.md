@@ -59,22 +59,33 @@ ai.apply(config, { plugin_dir = plugin_dir })
 
 ## Hooks Setup
 
-Agent state detection requires configuring `hooks/agent_status.sh` in each agent's hooks.
-The script writes state as JSON to `/tmp/wezterm-agent-<pane_id>`, which the plugin reads periodically.
+Agent state detection requires configuring the bundled `hooks/agent_status.sh` in each agent's hooks.
+The script writes state as JSON to `$TMPDIR/wezterm-agent-<pane_id>` (falls back to `/tmp` if `$TMPDIR` is unset), which the plugin reads periodically.
+
+### Finding the hooks path
+
+The hooks directory path is logged automatically when `ai.apply()` runs.
+Check the WezTerm Debug Overlay (default: `Ctrl+Shift+L` — Ctrl, not Cmd, even on macOS) for the path.
+
+The path is also available as `ai.hooks_dir` after calling `ai.apply()`.
+
+By referencing the plugin's `agent_status.sh` directly, the script is automatically updated when the plugin is updated.
+
+> **Note**: Copying the script elsewhere means plugin updates won't reach your copy. Referencing `ai.hooks_dir` directly is recommended.
 
 ### Claude Code
 
-`~/.claude/settings.json`:
+`~/.claude/settings.json` (if you have existing hooks, add entries to the arrays):
 
 ```json
 {
   "hooks": {
-    "SessionStart":     [{ "hooks": [{ "type": "command", "command": "<path>/hooks/agent_status.sh claude idle" }] }],
-    "SessionEnd":       [{ "hooks": [{ "type": "command", "command": "<path>/hooks/agent_status.sh claude clear" }] }],
-    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "<path>/hooks/agent_status.sh claude working" }] }],
-    "Stop":             [{ "hooks": [{ "type": "command", "command": "<path>/hooks/agent_status.sh claude done" }] }],
-    "PreToolUse":  [{ "matcher": "AskUserQuestion", "hooks": [{ "type": "command", "command": "<path>/hooks/agent_status.sh claude waiting" }] }],
-    "PostToolUse": [{ "matcher": "AskUserQuestion", "hooks": [{ "type": "command", "command": "<path>/hooks/agent_status.sh claude working" }] }]
+    "SessionStart":     [{ "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh claude idle" }] }],
+    "SessionEnd":       [{ "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh claude clear" }] }],
+    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh claude working" }] }],
+    "Stop":             [{ "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh claude done" }] }],
+    "PreToolUse":  [{ "matcher": "AskUserQuestion", "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh claude waiting" }] }],
+    "PostToolUse": [{ "matcher": "AskUserQuestion", "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh claude working" }] }]
   }
 }
 ```
@@ -89,8 +100,8 @@ Cursor lacks fine-grained lifecycle hooks, so the state always shows as `unknown
 {
   "version": 1,
   "hooks": {
-    "sessionStart": [{ "command": "<path>/hooks/agent_status.sh cursor unknown" }],
-    "sessionEnd": [{ "command": "<path>/hooks/agent_status.sh cursor clear" }]
+    "sessionStart": [{ "command": "<hooks_dir>/agent_status.sh cursor unknown" }],
+    "sessionEnd": [{ "command": "<hooks_dir>/agent_status.sh cursor clear" }]
   }
 }
 ```
@@ -102,9 +113,9 @@ Cursor lacks fine-grained lifecycle hooks, so the state always shows as `unknown
 ```json
 {
   "hooks": {
-    "SessionStart":     [{ "hooks": [{ "type": "command", "command": "<path>/hooks/agent_status.sh codex idle" }] }],
-    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "<path>/hooks/agent_status.sh codex working" }] }],
-    "Stop":             [{ "hooks": [{ "type": "command", "command": "<path>/hooks/agent_status.sh codex done" }] }]
+    "SessionStart":     [{ "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh codex idle" }] }],
+    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh codex working" }] }],
+    "Stop":             [{ "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh codex done" }] }]
   }
 }
 ```
@@ -116,10 +127,10 @@ Cursor lacks fine-grained lifecycle hooks, so the state always shows as `unknown
 ```json
 {
   "hooks": {
-    "SessionStart": [{ "hooks": [{ "type": "command", "command": "<path>/hooks/agent_status.sh gemini idle" }] }],
-    "SessionEnd":   [{ "hooks": [{ "type": "command", "command": "<path>/hooks/agent_status.sh gemini clear" }] }],
-    "BeforeAgent":  [{ "hooks": [{ "type": "command", "command": "<path>/hooks/agent_status.sh gemini working" }] }],
-    "AfterAgent":   [{ "hooks": [{ "type": "command", "command": "<path>/hooks/agent_status.sh gemini done" }] }]
+    "SessionStart": [{ "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh gemini idle" }] }],
+    "SessionEnd":   [{ "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh gemini clear" }] }],
+    "BeforeAgent":  [{ "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh gemini working" }] }],
+    "AfterAgent":   [{ "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh gemini done" }] }]
   }
 }
 ```
