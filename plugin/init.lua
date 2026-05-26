@@ -49,7 +49,7 @@ local function load_modules(plugin_dir, enabled_agents)
 end
 
 local M = {
-  version = "0.5.0",
+  version = "0.5.1",
   workspace = nil,
   worktree = nil,
   layout = nil,
@@ -165,13 +165,15 @@ function M.apply(config, user_opts)
   M.hooks_dir = plugin_dir .. "/hooks"
   wezterm.log_info("wezterm-ai-agents v" .. M.version .. " loaded (hooks_dir = " .. M.hooks_dir .. ")")
 
-  wezterm.on("mux-startup", function()
+  wezterm.on("gui-startup", function()
     for _, impl in ipairs(agent.all()) do
-      if impl.cleanup_stale then pcall(impl.cleanup_stale, agent.opts_for(impl, opts)) end
+      if impl.cleanup_stale then
+        local ok, err = pcall(impl.cleanup_stale, agent.opts_for(impl, opts))
+        if not ok then wezterm.log_warn("[ai-agents] cleanup_stale failed for " .. impl.id .. ": " .. tostring(err)) end
+      end
     end
+    wezterm.plugin.update_all()
   end)
-
-  wezterm.on("gui-startup", function() wezterm.plugin.update_all() end)
 
   -- Derive status colors/icons from all registered agents (first wins), merged with user overrides.
   local agent_colors, agent_icons = {}, {}
