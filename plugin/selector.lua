@@ -808,6 +808,52 @@ function M.build_keybinds(deps)
     end),
   })
 
+  -- Disable CMD+Q (accidental quit prevention)
+  add("disable_quit", { key = "q", mods = "CMD", action = act.Nop })
+
+  -- OPT+Enter passthrough
+  add("opt_enter", { key = "Enter", mods = "OPT", action = act.SendKey({ key = "Enter", mods = "OPT" }) })
+
+  -- Pane navigation
+  add("activate_pane_left", { key = "LeftArrow", mods = "CMD|OPT", action = act.ActivatePaneDirection("Left") })
+  add("activate_pane_right", { key = "RightArrow", mods = "CMD|OPT", action = act.ActivatePaneDirection("Right") })
+  add("activate_pane_up", { key = "UpArrow", mods = "CMD|OPT", action = act.ActivatePaneDirection("Up") })
+  add("activate_pane_down", { key = "DownArrow", mods = "CMD|OPT", action = act.ActivatePaneDirection("Down") })
+
+  -- Scroll
+  add("scroll_to_top", { key = "UpArrow", mods = "CMD", action = act.ScrollToTop })
+  add("scroll_to_bottom", { key = "DownArrow", mods = "CMD", action = act.ScrollToBottom })
+  add("scroll_page_up", { key = "UpArrow", mods = "OPT", action = act.ScrollByPage(-1) })
+  add("scroll_page_down", { key = "DownArrow", mods = "OPT", action = act.ScrollByPage(1) })
+
+  -- Line start / end
+  add("line_start", { key = "LeftArrow", mods = "CMD", action = act.SendKey({ key = "a", mods = "CTRL" }) })
+  add("line_end", { key = "RightArrow", mods = "CMD", action = act.SendKey({ key = "e", mods = "CTRL" }) })
+
+  -- Tab navigation
+  add("next_tab", { key = "RightArrow", mods = "CMD|SHIFT", action = act.ActivateTabRelative(1) })
+  add("prev_tab", { key = "LeftArrow", mods = "CMD|SHIFT", action = act.ActivateTabRelative(-1) })
+
+  -- Always-on-top toggle
+  local pinned_windows = {}
+  add("pin_toggle", {
+    key = "P",
+    mods = "CMD|SHIFT",
+    action = wezterm.action_callback(function(window, pane)
+      local L = opts.labels
+      local id = tostring(window:window_id())
+      if pinned_windows[id] then
+        pinned_windows[id] = nil
+        window:perform_action(act.SetWindowLevel("Normal"), pane)
+        toast(window, L.pin_off, 2000)
+      else
+        pinned_windows[id] = true
+        window:perform_action(act.SetWindowLevel("AlwaysOnTop"), pane)
+        toast(window, L.pin_on, 2000)
+      end
+    end),
+  })
+
   return keys
 end
 

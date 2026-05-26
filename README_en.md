@@ -155,6 +155,14 @@ Modifier keys are auto-detected by platform (macOS: `Cmd`, Linux: `Ctrl`). Overr
 | `Mod+Shift+[` / `]` | `move_tab_left` / `right` | Move tab left/right (synced) |
 | `Mod+Opt+/` | `split_right` | Split pane right |
 | `Mod+Opt+-` | `split_bottom` | Split pane bottom |
+| `Mod+Q` | `disable_quit` | Prevent accidental quit (Nop) |
+| `Opt+Enter` | `opt_enter` | OPT+Enter passthrough |
+| `Mod+Opt+←→↑↓` | `activate_pane_*` | Navigate between panes |
+| `Mod+↑` / `Mod+↓` | `scroll_to_top` / `bottom` | Scroll to top/bottom |
+| `Opt+↑` / `Opt+↓` | `scroll_page_up` / `down` | Scroll by page |
+| `Mod+←` / `Mod+→` | `line_start` / `end` | Move to line start/end |
+| `Mod+Shift+←→` | `prev_tab` / `next_tab` | Switch tabs |
+| `Mod+Shift+P` | `pin_toggle` | Toggle always-on-top window pin |
 
 Disable individual keybinds with `opts.disabled_keybinds = { "new_tab", "close_tab" }`.
 
