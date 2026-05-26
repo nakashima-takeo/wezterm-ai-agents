@@ -16,7 +16,7 @@
 
 AGENT="${1:?agent_id required}"
 STATUS="${2:-idle}"
-STATUS_DIR="${WEZTERM_AGENT_STATUS_DIR:-/tmp}"
+STATUS_DIR="${WEZTERM_AGENT_STATUS_DIR:-${TMPDIR:-/tmp}}"
 STATE_FILE="$STATUS_DIR/wezterm-agent-$WEZTERM_PANE"
 
 INPUT=$(cat)
