@@ -177,9 +177,7 @@ end
 
 local function mock_window(tabs)
   return {
-    mux_window = function()
-      return { tabs = function() return tabs end }
-    end,
+    tabs = function() return tabs end,
   }
 end
 
@@ -255,9 +253,7 @@ test("正常系：タブのCWD・セッションID変更がsync_allでJSONに反
 
   local mock_win = {
     get_workspace = function() return "my-project" end,
-    mux_window = function()
-      return { tabs = function() return { tab1, tab2 } end }
-    end,
+    tabs = function() return { tab1, tab2 } end,
   }
 
   local original = wezterm.mux.all_windows
@@ -295,9 +291,7 @@ test("正常系：タブの追加がsync_allでJSONに反映される", function
 
   local mock_win = {
     get_workspace = function() return "my-project" end,
-    mux_window = function()
-      return { tabs = function() return { tab1, tab2 } end }
-    end,
+    tabs = function() return { tab1, tab2 } end,
   }
 
   local original = wezterm.mux.all_windows
@@ -334,9 +328,7 @@ test("正常系：変更がなければJSONファイルを書き込まない", f
 
   local mock_win = {
     get_workspace = function() return "my-project" end,
-    mux_window = function()
-      return { tabs = function() return { tab1 } end }
-    end,
+    tabs = function() return { tab1 } end,
   }
 
   local original = wezterm.mux.all_windows
