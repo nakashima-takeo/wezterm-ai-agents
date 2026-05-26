@@ -40,6 +40,24 @@ Each agent retains a session ID and can resume via `--resume` after WezTerm rest
 
 ## Installation
 
+### Installing a Nerd Font
+
+A Nerd Font is required for status icons. With Homebrew:
+
+```bash
+brew install --cask font-jetbrains-mono-nerd-font
+```
+
+Set the font in your WezTerm config:
+
+```lua
+config.font = wezterm.font("JetBrainsMono Nerd Font")
+```
+
+> Any Nerd Font will work. Pick your favorite from https://www.nerdfonts.com/.
+
+### Plugin Setup
+
 ```lua
 local wezterm = require "wezterm"
 local config = wezterm.config_builder()
@@ -143,9 +161,6 @@ Modifier keys are auto-detected by platform (macOS: `Cmd`, Linux: `Ctrl`). Overr
 | Key | ID | Action |
 |-----|-----|--------|
 | `Mod+Shift+S` | `workspace_selector` | Select / switch workspace |
-| `Mod+Shift+N` | `workspace_register` | Register current cwd as workspace |
-| `Mod+Shift+U` | `workspace_update` | Update workspace with current layout |
-| `Mod+Shift+D` | `workspace_delete` | Delete workspace |
 | `Mod+Shift+X` | `worktree_selector` | Worktree management (create/switch/delete) |
 | `Mod+Shift+C` | `agent_spawn` | Spawn default agent in a new tab |
 | `Mod+Shift+A` | `agent_selector` | Agent selection UI |

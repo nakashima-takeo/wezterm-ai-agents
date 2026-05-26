@@ -14,7 +14,7 @@ M.colors = {
   waiting = "#f38ba8",
   done = "#86efac",
   idle = "#67e8f9",
-  error = "#f38ba8",
+  error = "#ef4444",
 }
 
 M.default_opts = {

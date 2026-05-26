@@ -68,7 +68,7 @@ local function build_ws_header(fmt, ws_name, is_running)
   table.insert(fmt, "ResetAttributes")
 end
 
-local CHIP_STATE_ORDER = { "working", "waiting", "done", "idle" }
+local CHIP_STATE_ORDER = { "working", "waiting", "done", "idle", "error" }
 
 local function append_agents_colored(fmt, deps, ws_name)
   local c = deps.agent.count(deps.opts, ws_name)

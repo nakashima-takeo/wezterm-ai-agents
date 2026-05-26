@@ -13,7 +13,7 @@ M.colors = {
   waiting = "#f38ba8",
   done = "#6ee7b7",
   idle = "#a78bfa",
-  error = "#f38ba8",
+  error = "#ef4444",
 }
 
 function M.spawn_args(opts, session_id, cwd)

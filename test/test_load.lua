@@ -49,6 +49,28 @@ test("正常系：ユーザーカスタム設定でapply()が完了する", func
   H.assert_true(#config.keys > 0)
 end)
 
+test("正常系：ユーザーのキーバインドがプラグインより後方に配置される", function()
+  wezterm._events = {}
+  local init = load_mod("init")
+  local config = wezterm.config_builder()
+  local user_action = function() end
+  config.keys = {
+    { key = "t", mods = "CMD", action = user_action },
+    { key = "Z", mods = "CMD|SHIFT", action = user_action },
+  }
+
+  init.apply(config, { plugin_dir = H.plugin_dir })
+
+  local last_cmd_t = nil
+  local last_cmd_shift_z = nil
+  for _, k in ipairs(config.keys) do
+    if k.key == "t" and k.mods == "CMD" then last_cmd_t = k end
+    if k.key == "Z" and k.mods == "CMD|SHIFT" then last_cmd_shift_z = k end
+  end
+  H.assert_eq(last_cmd_t.action, user_action, "user Cmd+T should be last (wins in WezTerm)")
+  H.assert_eq(last_cmd_shift_z.action, user_action, "user Cmd+Shift+Z should be last")
+end)
+
 test("正常系：WezTermサンドボックス環境（debugライブラリなし）でも動作する", function()
   local saved_debug = _G.debug
   _G.debug = nil

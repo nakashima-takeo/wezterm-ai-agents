@@ -98,7 +98,7 @@ end
 
 -- ============== Right status ==============
 
-local STATE_ORDER = { "working", "waiting", "done", "idle", "unknown" }
+local STATE_ORDER = { "working", "waiting", "done", "idle", "error", "unknown" }
 
 local function agent_count_segments(plugin_opts, agent_mod, colors, icons)
   local c = agent_mod.count(plugin_opts)
