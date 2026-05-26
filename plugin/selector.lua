@@ -127,7 +127,15 @@ function M.workspace_selector(window, pane, deps)
   local choices = {}
   local sorted = deps.workspace.sort(data.workspaces, default_ws)
 
-  -- Unregistered running workspaces (insert first)
+  for _, ws in ipairs(sorted) do
+    local is_running = existing[ws.name] or false
+    local fmt = {}
+    build_ws_header(fmt, ws.name, is_running)
+    append_ws_status(fmt, ws, is_running, deps)
+    table.insert(choices, { id = "ws:" .. ws.name, label = wezterm.format(fmt) })
+  end
+
+  -- Unregistered running workspaces (default at top, others at bottom)
   local unregistered = {}
   for name, _ in pairs(existing) do
     if not deps.workspace.find(data, name) then table.insert(unregistered, name) end
@@ -146,14 +154,6 @@ function M.workspace_selector(window, pane, deps)
     else
       table.insert(choices, entry)
     end
-  end
-
-  for _, ws in ipairs(sorted) do
-    local is_running = existing[ws.name] or false
-    local fmt = {}
-    build_ws_header(fmt, ws.name, is_running)
-    append_ws_status(fmt, ws, is_running, deps)
-    table.insert(choices, { id = "ws:" .. ws.name, label = wezterm.format(fmt) })
   end
 
   -- Actions section
