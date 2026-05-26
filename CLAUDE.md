@@ -1,72 +1,75 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+## 概要
 
-## Overview
+WezTerm プラグイン。並列 AI コーディングエージェントセッションを管理する。Lua (LuaJIT) で記述し、WezTerm の Lua サンドボックス上で動作する。永続ワークスペース、git worktree 連携、タブ/ペイン UI によるエージェント状態追跡を提供。
 
-WezTerm plugin for orchestrating parallel AI coding agent sessions. Lua (LuaJIT) codebase running inside WezTerm's Lua sandbox. The plugin manages persistent workspaces, git worktree integration, and AI agent state tracking via tab/pane UI.
-
-## Commands
+## コマンド
 
 ```bash
 # Lint
 luacheck .
 
-# Format check
+# フォーマットチェック
 stylua --check .
 
-# Format fix
+# フォーマット修正
 stylua .
 
-# Run all tests (requires luajit)
+# 全テスト実行 (luajit 必須)
 bash test/run.sh
 
-# Run single test
+# 単体テスト実行
 luajit test/test_agent.lua
 ```
 
-## Architecture
+## アーキテクチャ
 
-The plugin loads via `plugin/init.lua` which `dofile`s all other modules. WezTerm's Lua sandbox provides `wezterm` and `mux` globals but lacks the `debug` library.
+`plugin/init.lua` がエントリポイント。`dofile()` で全モジュールをロードする。WezTerm サンドボックスは `wezterm` / `mux` グローバルを提供するが、`debug` ライブラリは使用不可。
 
-**Module dependency flow:**
+**モジュール依存関係:**
 ```
-init.lua (entry point, apply() wires everything)
-├── workspace.lua  — JSON persistence, CRUD, snapshot/sync of tab state
-├── worktree.lua   — git worktree operations (list/add/remove/prune)
-├── layout.lua     — pane split layout snapshot/restore
-├── selector.lua   — InputSelector-based UI + keybind registration
-├── agent.lua      — agent registry, detection, state aggregation, shared JSON reader
-│   ├── agents/claude.lua — Claude Code implementation
-│   ├── agents/codex.lua  — OpenAI Codex CLI implementation
-│   ├── agents/cursor.lua — Cursor Agent CLI implementation
-│   └── agents/gemini.lua — Google Gemini CLI implementation
-└── ui.lua         — tab title formatting, right-status bar rendering
+init.lua (エントリポイント、apply() で全体を接続)
+├── workspace.lua  — JSON永続化、CRUD、タブ状態のスナップショット/同期
+├── worktree.lua   — git worktree 操作 (list/add/remove/prune)
+├── layout.lua     — ペイン分割レイアウトのスナップショット/復元
+├── selector.lua   — InputSelector ベースの UI + キーバインド登録
+├── labels.lua     — i18n ラベル (en/ja)
+├── agent.lua      — エージェントレジストリ、検出、状態集約、JSON リーダー
+│   ├── agents/claude.lua  — Claude Code
+│   ├── agents/codex.lua   — OpenAI Codex CLI
+│   ├── agents/cursor.lua  — Cursor Agent CLI
+│   └── agents/gemini.lua  — Google Gemini CLI
+└── ui.lua         — タブタイトル、右ステータスバーの描画
 ```
 
-**Key patterns:**
-- Modules are loaded via `dofile()` (no `require()` for plugin modules) — WezTerm sandbox constraint
-- Agent state is push-driven via hooks writing a unified JSON file per pane: `/tmp/wezterm-agent-<pane_id>`
-- `hooks/agent_status.sh` is the writer side (shared by all agents); Lua reads JSON with `wezterm.json_parse()`
-- JSON format: `{"agent":"<id>","state":"<state>","ts":<unix>,"session_id":"<sid>"}`
-- Workspace data persists to `~/.wezterm-workspaces.json` with atomic write (tmp + rename)
-- Cyclic module dependencies are broken by passing modules as function arguments (`agent_mod`, `layout_mod`)
+**主要パターン:**
+- モジュールは `dofile()` でロード (`require()` 不可 — WezTerm サンドボックスの制約)
+- エージェント状態は hooks が pane ごとに JSON ファイルを書き込む push 方式: `/tmp/wezterm-agent-<pane_id>`
+- `hooks/agent_status.sh` が書き込み側 (全エージェント共通)。Lua 側は `wezterm.json_parse()` で読み取り
+- JSON 形式: `{"agent":"<id>","state":"<state>","ts":<unix>,"session_id":"<sid>"}`
+- ワークスペースデータは `~/.wezterm-workspaces.json` にアトミック書き込み (tmp + rename)
+- 循環依存は関数引数でモジュールを渡して回避 (`agent_mod`, `layout_mod`)
 
-## Testing
+## テスト
 
-Tests use LuaJIT with a mock wezterm module (`test/mock_wezterm.lua`). Test files follow `test/test_*.lua` pattern. Each test file requires `test/helper.lua` which sets up the mock and provides assertions.
+LuaJIT + モック wezterm モジュール (`test/mock_wezterm.lua`) で実行。テストファイルは `test/test_*.lua` パターン。各ファイルで `test/helper.lua` を require し、`H.test(name, fn)` / `H.finish()` を使用。
 
-To add a test: create `test/test_<name>.lua`, require helper, use `H.test(name, fn)` / `H.finish()`.
+テスト追加: `test/test_<name>.lua` を作成し、helper を require して `H.test` / `H.finish` を呼ぶ。
 
-## Code Style
+## コードスタイル
 
-- LuaJIT target (`std = "luajit"` in luacheckrc)
-- StyLua: 2-space indent, 140 column width, double quotes preferred
-- Max line length: 140 chars
-- Globals allowed: `wezterm` (luacheck); `mux` used directly in runtime but not declared (WezTerm provides it)
+- LuaJIT ターゲット (`.luacheckrc`: `std = "luajit"`)
+- StyLua: 2スペースインデント、140桁幅、ダブルクォート優先
+- 最大行長: 140文字
+- グローバル: `wezterm` (luacheck で許可)、`mux` は実行時に WezTerm が提供
 
-## Adding a New Agent
+## コミットメッセージ / PR タイトル
 
-1. Create `plugin/agents/<id>.lua` implementing the interface defined in `plugin/agent.lua` (detect, state, session_id, spawn_args, etc.). Detection uses the unified JSON state file — check `data.agent == "<id>"`.
-2. Register in `init.lua` via `agent.register(load("agents/<id>"))`.
-3. Configure the agent's hooks to call `hooks/agent_status.sh <id> <state>` (or write the same JSON format directly).
+リリースノートは GitHub の `generate_release_notes: true` で自動生成される。main へのマージコミットや PR タイトルがそのままリリースノートに載るため、開発者以外の読み手（利用者）にも伝わる簡潔でわかりやすい表現にすること。
+
+## エージェントの追加方法
+
+1. `plugin/agents/<id>.lua` を作成。`plugin/agent.lua` で定義されたインターフェースを実装する (detect, state, session_id, spawn_args 等)。検出は JSON 状態ファイルの `data.agent == "<id>"` で判定。
+2. `init.lua` で `agent.register(load("agents/<id>"))` により登録。
+3. エージェントの hooks から `hooks/agent_status.sh <id> <state>` を呼ぶ (または同じ JSON 形式を直接書き込む)。
