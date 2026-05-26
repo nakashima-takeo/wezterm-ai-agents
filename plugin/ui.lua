@@ -120,6 +120,12 @@ function M.right_status_segments(window, pane, deps)
   local theme = opts.ui.right_status
   local rs = {}
 
+  local win_id = tostring(window:window_id())
+  if deps.selector and deps.selector.pinned_windows[win_id] then
+    table.insert(rs, { Foreground = { Color = theme.pin_color or "#b4befe" } })
+    table.insert(rs, { Text = "  " .. (theme.pin_icon or "") })
+  end
+
   if opts.right_status_extra and type(opts.right_status_extra) == "function" then
     local extras = opts.right_status_extra(window, pane, deps)
     if type(extras) == "table" then
