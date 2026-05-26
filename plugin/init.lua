@@ -42,9 +42,7 @@ local function load_modules(plugin_dir, enabled_agents)
         break
       end
     end
-    if not found then
-      error("wezterm-ai-agents: unknown agent '" .. id .. "'. Available: " .. table.concat(all_agent_ids, ", "))
-    end
+    if not found then error("wezterm-ai-agents: unknown agent '" .. id .. "'. Available: " .. table.concat(all_agent_ids, ", ")) end
     agent.register(load("agents/" .. id))
   end
 end

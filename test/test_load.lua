@@ -6,8 +6,16 @@ H.section("プラグイン初期化")
 
 test("正常系：全モジュールがエラーなくロードできる", function()
   local modules = {
-    "agent", "workspace", "worktree", "layout", "ui", "selector",
-    "agents/claude", "agents/codex", "agents/cursor", "agents/gemini",
+    "agent",
+    "workspace",
+    "worktree",
+    "layout",
+    "ui",
+    "selector",
+    "agents/claude",
+    "agents/codex",
+    "agents/cursor",
+    "agents/gemini",
   }
   for _, name in ipairs(modules) do
     local ok, err = pcall(load_mod, name)

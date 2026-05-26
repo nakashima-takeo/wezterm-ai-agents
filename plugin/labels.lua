@@ -31,6 +31,9 @@ local en = {
   tmp_cleanup_skipped = " (%d skipped — still running)",
   prune_result = "%d detached worktrees removed",
   prune_failed = " (%d skipped — uncommitted changes)",
+  ws_action_new = "new: Register workspace",
+  ws_action_update = "update: Snapshot current workspace",
+  ws_action_delete = "delete: Remove workspace",
 }
 
 local ja = {
@@ -66,6 +69,9 @@ local ja = {
   tmp_cleanup_skipped = "（%d個は実行中のためスキップ）",
   prune_result = "%d個の未接続ワークツリーを削除しました",
   prune_failed = "（%d個は未コミット変更があるためスキップ）",
+  ws_action_new = "new: ワークスペースを登録",
+  ws_action_update = "update: 現在のワークスペースを保存",
+  ws_action_delete = "delete: ワークスペースを削除",
 }
 
 return { en = en, ja = ja }
