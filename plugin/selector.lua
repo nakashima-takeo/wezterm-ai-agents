@@ -304,12 +304,21 @@ function M.workspace_delete(window, pane, deps)
               local removed_wt = false
               local is_wt = false
               if target_cwd then
+                target_cwd = target_cwd:gsub("/$", "")
                 local git_root = deps.worktree.get_git_root(target_cwd)
                 if git_root and git_root ~= target_cwd then
-                  is_wt = true
-                  local ok = deps.worktree.remove(git_root, target_cwd, false)
-                  if not ok then ok = deps.worktree.remove(git_root, target_cwd, true) end
-                  removed_wt = ok
+                  local worktrees = deps.worktree.list(git_root)
+                  for _, wt in ipairs(worktrees) do
+                    if wt.path == target_cwd then
+                      is_wt = true
+                      break
+                    end
+                  end
+                  if is_wt then
+                    local ok = deps.worktree.remove(git_root, target_cwd, false)
+                    if not ok then ok = deps.worktree.remove(git_root, target_cwd, true) end
+                    removed_wt = ok
+                  end
                 end
               end
 
