@@ -5,7 +5,6 @@ local en = {
   enter_cwd = "Enter CWD (press Enter to keep current):",
   ws_registered = "Workspace '%s' registered\n%s",
   ws_not_registered = "Workspace '%s' is not registered",
-  ws_updated = "Workspace '%s' updated to current state",
   no_ws_to_delete = "No workspaces to delete",
   no_deletable_ws = "No deletable workspaces (active workspace is excluded)",
   select_ws_to_delete = "Select workspace to delete",
@@ -31,6 +30,8 @@ local en = {
   tmp_cleanup_skipped = " (%d skipped — still running)",
   prune_result = "%d detached worktrees removed",
   prune_failed = " (%d skipped — uncommitted changes)",
+  ws_action_new = "new: Register workspace",
+  ws_action_delete = "delete: Remove workspace",
 }
 
 local ja = {
@@ -40,7 +41,6 @@ local ja = {
   enter_cwd = "CWDを入力 (変更不要ならそのままEnter):",
   ws_registered = "ワークスペース '%s' を登録しました\n%s",
   ws_not_registered = "ワークスペース '%s' は未登録です",
-  ws_updated = "ワークスペース '%s' を現在の状態で更新しました",
   no_ws_to_delete = "削除するワークスペースがありません",
   no_deletable_ws = "削除可能なワークスペースがありません（アクティブなワークスペースは除外）",
   select_ws_to_delete = "削除するワークスペースを選択",
@@ -66,6 +66,8 @@ local ja = {
   tmp_cleanup_skipped = "（%d個は実行中のためスキップ）",
   prune_result = "%d個の未接続ワークツリーを削除しました",
   prune_failed = "（%d個は未コミット変更があるためスキップ）",
+  ws_action_new = "new: ワークスペースを登録",
+  ws_action_delete = "delete: ワークスペースを削除",
 }
 
 return { en = en, ja = ja }

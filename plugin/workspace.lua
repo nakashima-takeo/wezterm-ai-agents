@@ -154,47 +154,19 @@ function M.snapshot_tabs(window, agent_mod, layout_mod, plugin_opts)
   return tabs
 end
 
--- Periodic sync: pull session_id and cwd from running panes into workspace JSON.
-function M.sync_session_ids(opts, agent_mod, plugin_opts)
+-- Periodic full snapshot: capture tab structure, agents, layouts, and cwds for all running workspaces.
+function M.sync_all(opts, agent_mod, layout_mod, plugin_opts)
   local data = M.read(opts)
   local changed = false
   for _, win in ipairs(mux.all_windows()) do
     local ws = M.find(data, win:get_workspace())
-    if ws and type(ws.tabs) == "table" then
-      for i, tab in ipairs(win:tabs()) do
-        local saved = ws.tabs[i]
-        if saved then
-          if saved.agent then
-            for _, p in ipairs(tab:panes()) do
-              local impl = agent_mod.get(saved.agent)
-              if impl then
-                local agent_opts = agent_mod.opts_for(impl, plugin_opts)
-                if impl.detect(p, agent_opts) then
-                  local sid = impl.session_id(p, agent_opts)
-                  if sid and saved.session_id ~= sid then
-                    saved.session_id = sid
-                    changed = true
-                  end
-                  local pcwd = cwd_of(p)
-                  if pcwd and saved.cwd ~= pcwd then
-                    saved.cwd = pcwd
-                    changed = true
-                  end
-                  break
-                end
-              end
-            end
-          else
-            local active_pane = tab:active_pane()
-            if active_pane then
-              local pcwd = cwd_of(active_pane)
-              if pcwd and saved.cwd ~= pcwd then
-                saved.cwd = pcwd
-                changed = true
-              end
-            end
-          end
-        end
+    if ws then
+      local tabs = M.snapshot_tabs(win, agent_mod, layout_mod, plugin_opts)
+      local old = wezterm.json_encode(ws.tabs or {})
+      local new = wezterm.json_encode(tabs)
+      if old ~= new then
+        ws.tabs = tabs
+        changed = true
       end
     end
   end

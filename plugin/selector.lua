@@ -51,13 +51,35 @@ local function append_agents_colored(fmt, deps, ws_name)
   return any
 end
 
+local function append_ws_status(fmt, ws, is_running, deps)
+  if is_running then
+    append_agents_colored(fmt, deps, ws.name)
+  else
+    local saved = deps.workspace.count_saved_sessions(ws)
+    if saved > 0 then
+      local idle_icon = deps.opts.ui.right_status.icons.idle or ""
+      table.insert(fmt, { Foreground = { AnsiColor = "Grey" } })
+      table.insert(fmt, { Text = "  " .. idle_icon .. " \xC3\x97" .. saved })
+    end
+  end
+end
+
+local function shorten_path(path)
+  local home = wezterm.home_dir
+  if path == home or path:sub(1, #home + 1) == home .. "/" then return "~" .. path:sub(#home + 1) end
+  return path
+end
+
 M.append_agents_colored = append_agents_colored
+M.append_ws_status = append_ws_status
 M.build_ws_header = build_ws_header
+M.shorten_path = shorten_path
 
 -- ============== Workspace selector (Cmd+Shift+S) ==============
 
 function M.workspace_selector(window, pane, deps)
   local opts = deps.opts
+  local L = opts.labels
   local data = deps.workspace.read(opts.workspace)
   local default_ws = opts.workspace.default_workspace
 
@@ -68,24 +90,8 @@ function M.workspace_selector(window, pane, deps)
 
   local choices = {}
   local sorted = deps.workspace.sort(data.workspaces, default_ws)
-  for _, ws in ipairs(sorted) do
-    local is_running = existing[ws.name] or false
-    local fmt = {}
-    build_ws_header(fmt, ws.name, is_running)
-    if is_running then
-      append_agents_colored(fmt, deps, ws.name)
-    else
-      local saved = deps.workspace.count_saved_sessions(ws)
-      if saved > 0 then
-        local idle_icon = deps.opts.ui.right_status.icons.idle or ""
-        table.insert(fmt, { Foreground = { AnsiColor = "Grey" } })
-        table.insert(fmt, { Text = "  " .. idle_icon .. " \xC3\x97" .. saved })
-      end
-    end
-    table.insert(choices, { id = ws.name, label = wezterm.format(fmt) })
-  end
 
-  -- Unregistered running workspaces
+  -- Unregistered running workspaces (insert first)
   local unregistered = {}
   for name, _ in pairs(existing) do
     if not deps.workspace.find(data, name) then table.insert(unregistered, name) end
@@ -98,7 +104,7 @@ function M.workspace_selector(window, pane, deps)
       table.insert(fmt, { Foreground = { AnsiColor = "Red" } })
       table.insert(fmt, { Text = "  unregistered" })
     end
-    local entry = { id = name, label = wezterm.format(fmt) }
+    local entry = { id = "ws:" .. name, label = wezterm.format(fmt) }
     if name == default_ws then
       table.insert(choices, 1, entry)
     else
@@ -106,10 +112,18 @@ function M.workspace_selector(window, pane, deps)
     end
   end
 
-  if #choices == 0 then
-    toast(window, opts.labels.no_workspaces)
-    return
+  for _, ws in ipairs(sorted) do
+    local is_running = existing[ws.name] or false
+    local fmt = {}
+    build_ws_header(fmt, ws.name, is_running)
+    append_ws_status(fmt, ws, is_running, deps)
+    table.insert(choices, { id = "ws:" .. ws.name, label = wezterm.format(fmt) })
   end
+
+  -- Actions section
+  table.insert(choices, { id = "_sep_actions", label = "── Actions ──" })
+  table.insert(choices, { id = "action:new", label = L.ws_action_new })
+  if #data.workspaces > 0 then table.insert(choices, { id = "action:delete", label = L.ws_action_delete }) end
 
   window:perform_action(
     act.InputSelector({
@@ -118,14 +132,27 @@ function M.workspace_selector(window, pane, deps)
       fuzzy = true,
       action = wezterm.action_callback(function(iw, ip, id)
         if not id then return end
-        deps.workspace.update_last_used(opts.workspace, id)
-        if deps.workspace.exists(id) then
-          iw:perform_action(act.SwitchToWorkspace({ name = id }), ip)
+        if id:match("^_sep_") then return end
+
+        if id == "action:new" then
+          M.workspace_register(iw, ip, deps)
+          return
+        end
+        if id == "action:delete" then
+          M.workspace_delete(iw, ip, deps)
+          return
+        end
+
+        local ws_name = id:match("^ws:(.+)$")
+        if not ws_name then return end
+        deps.workspace.update_last_used(opts.workspace, ws_name)
+        if deps.workspace.exists(ws_name) then
+          iw:perform_action(act.SwitchToWorkspace({ name = ws_name }), ip)
         else
-          local ws_config = deps.workspace.find(data, id)
+          local ws_config = deps.workspace.find(data, ws_name)
           if ws_config then
             deps.workspace.create(ws_config, deps.agent, deps.layout, opts, opts.default_tabs)
-            iw:perform_action(act.SwitchToWorkspace({ name = id }), ip)
+            iw:perform_action(act.SwitchToWorkspace({ name = ws_name }), ip)
           end
         end
       end),
@@ -179,31 +206,7 @@ function M.workspace_register(window, pane, deps)
   )
 end
 
--- ============== Workspace update (Cmd+Shift+U) ==============
-
-function M.workspace_update(window, pane, deps)
-  local opts = deps.opts
-  local L = opts.labels
-  local ws_name = window:active_workspace()
-  local data = deps.workspace.read(opts.workspace)
-  local ws = deps.workspace.find(data, ws_name)
-  if not ws then
-    toast(window, string.format(L.ws_not_registered, ws_name))
-    return
-  end
-  local cwd_path = get_cwd_path(pane)
-  if not cwd_path then
-    toast(window, L.cannot_get_cwd)
-    return
-  end
-
-  ws.cwd = cwd_path
-  ws.tabs = deps.workspace.snapshot_tabs(window, deps.agent, deps.layout, opts)
-  deps.workspace.write(opts.workspace, data)
-  toast(window, string.format(L.ws_updated, ws_name))
-end
-
--- ============== Workspace delete (Cmd+Shift+D) ==============
+-- ============== Workspace delete ==============
 
 function M.workspace_delete(window, pane, deps)
   local opts = deps.opts
@@ -220,23 +223,19 @@ function M.workspace_delete(window, pane, deps)
     running[win:get_workspace()] = true
   end
 
-  local sorted = {}
-  for _, ws in ipairs(data.workspaces) do
-    table.insert(sorted, ws)
-  end
-  table.sort(sorted, function(a, b) return a.name < b.name end)
+  local default_ws = opts.workspace.default_workspace
+  local sorted = deps.workspace.sort(data.workspaces, default_ws)
 
   local choices = {}
-  local home = wezterm.home_dir
   for _, ws in ipairs(sorted) do
     if ws.name ~= active_ws then
-      local parts = {}
-      build_ws_header(parts, ws.name, running[ws.name] or false)
-      local short_cwd = ws.cwd or ""
-      if short_cwd == home or short_cwd:sub(1, #home + 1) == home .. "/" then short_cwd = "~" .. short_cwd:sub(#home + 1) end
-      table.insert(parts, { Foreground = { AnsiColor = "Grey" } })
-      table.insert(parts, { Text = "  " .. short_cwd })
-      table.insert(choices, { id = ws.name, label = wezterm.format(parts) })
+      local is_running = running[ws.name] or false
+      local fmt = {}
+      build_ws_header(fmt, ws.name, is_running)
+      append_ws_status(fmt, ws, is_running, deps)
+      table.insert(fmt, { Foreground = { AnsiColor = "Grey" } })
+      table.insert(fmt, { Text = "  " .. shorten_path(ws.cwd or "") })
+      table.insert(choices, { id = ws.name, label = wezterm.format(fmt) })
     end
   end
 
@@ -636,21 +635,6 @@ function M.build_keybinds(deps)
     key = "S",
     mods = "CMD|SHIFT",
     action = wezterm.action_callback(function(w, p) M.workspace_selector(w, p, deps) end),
-  })
-  add("workspace_register", {
-    key = "N",
-    mods = "CMD|SHIFT",
-    action = wezterm.action_callback(function(w, p) M.workspace_register(w, p, deps) end),
-  })
-  add("workspace_update", {
-    key = "U",
-    mods = "CMD|SHIFT",
-    action = wezterm.action_callback(function(w, p) M.workspace_update(w, p, deps) end),
-  })
-  add("workspace_delete", {
-    key = "D",
-    mods = "CMD|SHIFT",
-    action = wezterm.action_callback(function(w, p) M.workspace_delete(w, p, deps) end),
   })
   add("worktree_selector", {
     key = "X",
