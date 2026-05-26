@@ -837,9 +837,10 @@ function M.build_keybinds(deps)
   add("scroll_page_up", { key = "UpArrow", mods = "OPT", action = act.ScrollByPage(-1) })
   add("scroll_page_down", { key = "DownArrow", mods = "OPT", action = act.ScrollByPage(1) })
 
-  -- Line start / end
+  -- Line start / end / delete
   add("line_start", { key = "LeftArrow", mods = "CMD", action = act.SendKey({ key = "a", mods = "CTRL" }) })
   add("line_end", { key = "RightArrow", mods = "CMD", action = act.SendKey({ key = "e", mods = "CTRL" }) })
+  add("line_delete", { key = "Backspace", mods = "CMD", action = act.SendKey({ key = "u", mods = "CTRL" }) })
 
   -- Tab navigation
   add("next_tab", { key = "RightArrow", mods = "CMD|SHIFT", action = act.ActivateTabRelative(1) })
