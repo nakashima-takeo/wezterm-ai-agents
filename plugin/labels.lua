@@ -32,7 +32,7 @@ local en = {
   prune_failed = " (%d skipped — uncommitted changes)",
   ws_action_new = "new: Register workspace",
   ws_action_delete = "delete: Remove workspace",
-  no_editor_found = "No editor configured. Set $VISUAL, $EDITOR, or opts.default_editor",
+  no_editor_found = "No GUI editor found (code/cursor/windsurf/zed/subl). Set opts.default_editor",
 }
 
 local ja = {
@@ -69,7 +69,7 @@ local ja = {
   prune_failed = "（%d個は未コミット変更があるためスキップ）",
   ws_action_new = "new: ワークスペースを登録",
   ws_action_delete = "delete: ワークスペースを削除",
-  no_editor_found = "エディター未設定。$VISUAL、$EDITOR、または opts.default_editor を設定してください",
+  no_editor_found = "GUIエディターが見つかりません (code/cursor/windsurf/zed/subl)。opts.default_editor を設定してください",
 }
 
 return { en = en, ja = ja }

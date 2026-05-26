@@ -18,6 +18,42 @@ end
 
 local function toast(window, msg, ms) window:toast_notification("WezTerm", msg, nil, ms or 3000) end
 
+local GUI_EDITORS = { "code", "cursor", "windsurf", "zed", "subl" }
+local gui_editor_set = {}
+for _, e in ipairs(GUI_EDITORS) do
+  gui_editor_set[e] = true
+end
+
+local function is_gui_editor(cmd)
+  if not cmd then return false end
+  local basename = cmd:match("([^/]+)$") or cmd
+  return gui_editor_set[basename] ~= nil
+end
+
+local cached_editor = nil
+local function detect_gui_editor(explicit)
+  if explicit then return explicit end
+  if cached_editor ~= nil then return cached_editor or nil end
+  for _, env in ipairs({ "VISUAL", "EDITOR" }) do
+    local val = os.getenv(env)
+    if is_gui_editor(val) then
+      cached_editor = val
+      return val
+    end
+  end
+  local query = "command -v " .. table.concat(GUI_EDITORS, " ") .. " 2>/dev/null | head -1"
+  local ok, stdout = wezterm.run_child_process({ "/bin/sh", "-lc", query })
+  if ok and stdout then
+    local path = stdout:match("(%S+)")
+    if path then
+      cached_editor = path
+      return path
+    end
+  end
+  cached_editor = false
+  return nil
+end
+
 local function build_ws_header(fmt, ws_name, is_running)
   if is_running then
     table.insert(fmt, { Foreground = { AnsiColor = "Green" } })
@@ -699,15 +735,14 @@ function M.build_keybinds(deps)
     key = "E",
     mods = "CMD|SHIFT",
     action = wezterm.action_callback(function(window, pane)
-      local L = opts.labels
-      local editor = opts.default_editor or os.getenv("VISUAL") or os.getenv("EDITOR")
+      local editor = detect_gui_editor(opts.default_editor)
       if not editor then
-        toast(window, L.no_editor_found)
+        toast(window, opts.labels.no_editor_found)
         return
       end
       local cwd = get_cwd_path(pane)
       if not cwd then
-        toast(window, L.cannot_get_cwd)
+        toast(window, opts.labels.cannot_get_cwd)
         return
       end
       wezterm.background_child_process({ editor, cwd })

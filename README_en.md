@@ -137,7 +137,7 @@ Modifier keys are auto-detected by platform (macOS: `Cmd`, Linux: `Ctrl`). Overr
 | `Mod+Shift+X` | `worktree_selector` | Worktree management (create/switch/delete) |
 | `Mod+Shift+C` | `agent_spawn` | Spawn default agent in a new tab |
 | `Mod+Shift+A` | `agent_selector` | Agent selection UI |
-| `Mod+Shift+E` | `open_editor` | Open editor in a new tab |
+| `Mod+Shift+E` | `open_editor` | Open current directory in GUI editor |
 | `Mod+T` | `new_tab` | New tab (workspace-synced) |
 | `Mod+W` | `close_tab` | Close tab (protects last tab) |
 | `Mod+Opt+W` | `close_pane` | Close pane (protects last pane) |
@@ -165,7 +165,7 @@ ai.apply(config, {
 ai.apply(config, {
   enabled_agents = nil,             -- nil = all; or { "claude", "codex" }
   default_agent = nil,              -- nil = first registered; or "claude"
-  default_editor = nil,             -- nil = $VISUAL or $EDITOR; or "nvim" etc.
+  default_editor = nil,             -- nil = auto-detect (code/cursor/windsurf/zed/subl); or "/usr/local/bin/cursor" etc.
   locale = "ja",                    -- auto-detected from LANG env; "en" | "ja"
   modifier_prefix = "CMD",          -- auto-detected: macOS="CMD", Linux="CTRL"
   workspace = {
