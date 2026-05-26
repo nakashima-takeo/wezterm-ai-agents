@@ -40,6 +40,24 @@ Each agent retains a session ID and can resume via `--resume` after WezTerm rest
 
 ## Installation
 
+### Installing a Nerd Font
+
+A Nerd Font is required for status icons. With Homebrew:
+
+```bash
+brew install --cask font-hackgen-nerd
+```
+
+Set the font in your WezTerm config:
+
+```lua
+config.font = wezterm.font("HackGen Console NF")
+```
+
+> Any Nerd Font will work. Pick your favorite from https://www.nerdfonts.com/.
+
+### Plugin Setup
+
 ```lua
 local wezterm = require "wezterm"
 local config = wezterm.config_builder()

@@ -40,6 +40,24 @@ macOS / Linux。Windows は非対応。
 
 ## インストール
 
+### Nerd Font のインストール
+
+ステータスアイコンの表示に Nerd Font が必要です。Homebrew の場合:
+
+```bash
+brew install --cask font-hackgen-nerd
+```
+
+WezTerm の設定でフォントを指定:
+
+```lua
+config.font = wezterm.font("HackGen Console NF")
+```
+
+> 他の Nerd Font でも動作します。お好みのフォントを https://www.nerdfonts.com/ から選んでください。
+
+### プラグインの設定
+
 ```lua
 local wezterm = require "wezterm"
 local config = wezterm.config_builder()
