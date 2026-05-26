@@ -21,7 +21,7 @@ local function detect_plugin_dir(user_dir)
   error("wezterm-ai-agents: plugin_dir not detected. Pass opts.plugin_dir or load via wezterm.plugin.require.")
 end
 
-local workspace, worktree, layout, selector, agent, ui, builtin_labels
+local workspace, worktree, layout, selector, agent, ui, builtin_labels, builtin_icons
 
 local all_agent_ids = { "claude", "cursor", "codex", "gemini" }
 
@@ -34,6 +34,7 @@ local function load_modules(plugin_dir, enabled_agents)
   agent = load("agent")
   ui = load("ui")
   builtin_labels = load("labels")
+  builtin_icons = load("icons")
   for _, id in ipairs(enabled_agents or all_agent_ids) do
     local found = false
     for _, valid in ipairs(all_agent_ids) do
@@ -69,6 +70,7 @@ local default_opts = {
     path = "sibling", -- "sibling" | "subdirectory" | custom template with {git_root}, {parent}, {repo}, {branch}
   },
 
+  nerd_font = false,
   status_dir = os.getenv("TMPDIR") or "/tmp",
   enabled_agents = nil, -- nil = all; or { "claude" } to register only specific agents
   default_agent = nil, -- nil = first registered; or "claude" to set default agent for Cmd+Shift+C
@@ -151,6 +153,11 @@ function M.apply(config, user_opts)
     wezterm.log_error(
       "wezterm-ai-agents: default_agent '" .. opts.default_agent .. "' is not registered. Check enabled_agents or spelling."
     )
+  end
+
+  local icon_set = opts.nerd_font and builtin_icons.nerd or builtin_icons.unicode
+  for _, impl in ipairs(agent.all()) do
+    impl.icons = icon_set
   end
 
   opts.labels = merge(builtin_labels[opts.locale] or builtin_labels.en, opts.labels or {})

@@ -8,7 +8,6 @@ local M = {}
 
 M.id = "codex"
 M.display_name = "Codex"
-M.icons = { working = "\xEF\x83\xA7", waiting = "\xEF\x81\x99", done = "\xF3\xB0\x82\x9A", idle = "\xF3\xB0\x92\xB2" }
 M.colors = {
   working = "#10b981",
   waiting = "#f38ba8",
