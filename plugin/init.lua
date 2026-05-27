@@ -148,6 +148,7 @@ function M.apply(config, user_opts)
   M.opts = opts
 
   local plugin_dir = detect_plugin_dir(opts.plugin_dir)
+  opts.plugin_dir = plugin_dir
   load_modules(plugin_dir, opts.enabled_agents)
   M.workspace, M.worktree, M.layout, M.selector, M.agent, M.ui = workspace, worktree, layout, selector, agent, ui
 

@@ -35,8 +35,7 @@ local en = {
   no_editor_found = "No GUI editor found (code/cursor/windsurf/zed/subl). Set opts.default_editor",
   pin_on = "Pinned to front",
   pin_off = "Unpinned",
-  git_diff_all = "Show all changes",
-  git_no_changes = "No changes",
+  git_no_tui = "No git TUI found (lazygit/tig/gitui). Install one or set opts.git_tui",
 }
 
 local ja = {
@@ -76,8 +75,7 @@ local ja = {
   no_editor_found = "GUIエディターが見つかりません (code/cursor/windsurf/zed/subl)。opts.default_editor を設定してください",
   pin_on = "常に前面に固定",
   pin_off = "固定を解除",
-  git_diff_all = "すべての変更を表示",
-  git_no_changes = "変更なし",
+  git_no_tui = "Git TUIが見つかりません (lazygit/tig/gitui)。インストールするか opts.git_tui を設定してください",
 }
 
 return { en = en, ja = ja }

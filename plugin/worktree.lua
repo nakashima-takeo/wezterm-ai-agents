@@ -150,20 +150,4 @@ function M.delete_branch(git_root, branch) wezterm.run_child_process({ "git", "-
 
 function M.prune(git_root) wezterm.run_child_process({ "git", "-C", git_root, "worktree", "prune" }) end
 
-function M.status(cwd)
-  local ok, stdout = wezterm.run_child_process({ "git", "-C", cwd, "status", "--porcelain" })
-  if not ok or not stdout then return {} end
-  local files = {}
-  for line in stdout:gmatch("[^\n]+") do
-    table.insert(files, { xy = line:sub(1, 2), name = line:sub(4) })
-  end
-  return files
-end
-
-function M.current_branch(cwd)
-  local ok, stdout = wezterm.run_child_process({ "git", "-C", cwd, "rev-parse", "--abbrev-ref", "HEAD" })
-  if ok and stdout then return stdout:gsub("%s+$", "") end
-  return nil
-end
-
 return M
