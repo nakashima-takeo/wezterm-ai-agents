@@ -398,7 +398,6 @@ local function show_worktree_action_menu(window, pane, wt_path, branch, is_main,
   local L = deps.opts.labels
   local choices = {}
   local agents = deps.agent.all()
-  table.insert(choices, { id = "_sep_tab", label = "── Tab ──" })
   table.insert(choices, { id = "tab:__shell__", label = "\xF3\xB0\x86\x8D shell" })
   if agents[1] then table.insert(choices, { id = "tab:" .. agents[1].id, label = "\xEF\x91\x8A " .. agents[1].display_name }) end
   for i = 2, #agents do
