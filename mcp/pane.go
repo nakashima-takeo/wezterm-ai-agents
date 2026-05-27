@@ -29,14 +29,11 @@ func registerPaneTools(s *server.MCPServer, cfg *Config) {
 
 	s.AddTool(
 		mcp.NewTool("spawn_agent",
-			mcp.WithDescription("Spawn an AI agent in a new WezTerm tab. Returns the new pane ID. Use the 'prompt' parameter to give the agent an initial task."),
+			mcp.WithDescription("Spawn an AI agent in a new WezTerm tab. Returns the new pane ID."),
 			mcp.WithString("agent",
 				mcp.Required(),
 				mcp.Description("Agent name: claude, codex, gemini, cursor"),
 				mcp.Enum("claude", "codex", "gemini", "cursor"),
-			),
-			mcp.WithString("prompt",
-				mcp.Description("Initial prompt/task to send to the agent on startup (passed via -p flag)"),
 			),
 			mcp.WithString("cwd",
 				mcp.Description("Working directory for the agent"),
@@ -50,7 +47,6 @@ func registerPaneTools(s *server.MCPServer, cfg *Config) {
 		),
 		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			agentName, _ := req.RequireString("agent")
-			prompt := req.GetString("prompt", "")
 			cwd := req.GetString("cwd", "")
 			paneID := req.GetInt("pane_id", -1)
 			sessionID := req.GetString("session_id", "")
@@ -66,10 +62,6 @@ func registerPaneTools(s *server.MCPServer, cfg *Config) {
 				} else {
 					agentCmd += " --resume " + sessionID
 				}
-			}
-
-			if prompt != "" {
-				agentCmd += " -p " + shellQuote(prompt)
 			}
 
 			args := []string{"cli", "spawn"}
@@ -137,7 +129,7 @@ func registerPaneTools(s *server.MCPServer, cfg *Config) {
 
 	s.AddTool(
 		mcp.NewTool("send_text",
-			mcp.WithDescription("Send text to a WezTerm pane. Text is piped via stdin to preserve raw bytes. Set submit=true to append Option+Enter (ESC+LF) and auto-submit in Claude Code."),
+			mcp.WithDescription("Send text to a WezTerm pane. Text is piped via stdin to preserve raw bytes. Set submit=true to append CR and auto-submit in Claude Code."),
 			mcp.WithInteger("pane_id",
 				mcp.Required(),
 				mcp.Description("The target pane ID"),
@@ -147,7 +139,7 @@ func registerPaneTools(s *server.MCPServer, cfg *Config) {
 				mcp.Description("The text to send"),
 			),
 			mcp.WithBoolean("submit",
-				mcp.Description("Append Option+Enter (ESC+LF) after the text to submit in Claude Code. Default: false"),
+				mcp.Description("Append CR after the text to submit the prompt. Default: false"),
 			),
 			mcp.WithBoolean("no_paste",
 				mcp.Description("Send text directly instead of as a bracketed paste. Default: false"),
@@ -178,17 +170,18 @@ func registerPaneTools(s *server.MCPServer, cfg *Config) {
 	)
 }
 
-func shellQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'"
-}
-
 func stripAnsiEscapes(s string) string {
 	var out strings.Builder
 	i := 0
 	for i < len(s) {
 		if s[i] == 0x1b {
 			i++
-			if i < len(s) && s[i] == '[' {
+			if i >= len(s) {
+				break
+			}
+			switch s[i] {
+			case '[':
+				// CSI sequence: ESC [ <params> <final>
 				i++
 				for i < len(s) && s[i] >= 0x20 && s[i] <= 0x3f {
 					i++
@@ -196,7 +189,9 @@ func stripAnsiEscapes(s string) string {
 				if i < len(s) {
 					i++
 				}
-			} else if i < len(s) && s[i] == ']' {
+			case ']':
+				// OSC sequence: ESC ] ... (BEL | ST)
+				i++
 				for i < len(s) && s[i] != 0x07 && !(i+1 < len(s) && s[i] == 0x1b && s[i+1] == '\\') {
 					i++
 				}
@@ -205,6 +200,21 @@ func stripAnsiEscapes(s string) string {
 				} else if i+1 < len(s) {
 					i += 2
 				}
+			case '(':
+				// Character set designation: ESC ( <charset>
+				i++
+				if i < len(s) {
+					i++
+				}
+			case ')':
+				// Character set designation: ESC ) <charset>
+				i++
+				if i < len(s) {
+					i++
+				}
+			default:
+				// Other 2-byte ESC sequences (ESC =, ESC >, etc.)
+				i++
 			}
 		} else {
 			out.WriteByte(s[i])

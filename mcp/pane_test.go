@@ -1,0 +1,33 @@
+package main
+
+import "testing"
+
+func TestStripAnsiEscapes(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"plain text", "hello world", "hello world"},
+		{"CSI color", "\x1b[31mred\x1b[0m", "red"},
+		{"CSI with params", "\x1b[38:2::177:185:249mtext\x1b[39m", "text"},
+		{"charset designation ESC(B", "\x1b(Bhello", "hello"},
+		{"charset designation ESC)0", "\x1b)0hello", "hello"},
+		{"OSC with BEL", "\x1b]8;;http://example.com\x07link\x1b]8;;\x07", "link"},
+		{"OSC with ST", "\x1b]8;;http://example.com\x1b\\link\x1b]8;;\x1b\\", "link"},
+		{"mixed sequences", "\x1b(B\x1b[0;1mBold\x1b(B\x1b[0m normal", "Bold normal"},
+		{"ESC = and ESC >", "\x1b=hello\x1b>world", "helloworld"},
+		{"empty string", "", ""},
+		{"only escapes", "\x1b[31m\x1b[0m", ""},
+		{"Claude Code TUI sample", " \x1b(BClaude\x1b(B \x1b(BCode\x1b(B v2.1", " Claude Code v2.1"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := stripAnsiEscapes(tt.input)
+			if got != tt.want {
+				t.Errorf("stripAnsiEscapes(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
