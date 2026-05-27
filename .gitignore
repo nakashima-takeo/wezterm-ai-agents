@@ -4,3 +4,6 @@
 .claude.local/
 
 CLAUDE.local.md
+
+# MCP server binary
+mcp/wezterm-mcp
