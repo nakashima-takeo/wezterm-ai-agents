@@ -20,6 +20,24 @@ end
 
 local function toast(window, msg, ms) window:toast_notification("WezTerm", msg, nil, ms or 3000) end
 
+local GIT_TUIS = { "lazygit", "tig", "gitui" }
+local cached_git_tui = nil
+local function detect_git_tui(explicit)
+  if explicit then return explicit end
+  if cached_git_tui ~= nil then return cached_git_tui or nil end
+  local query = "command -v " .. table.concat(GIT_TUIS, " ") .. " 2>/dev/null | head -1"
+  local ok, stdout = wezterm.run_child_process({ "/bin/sh", "-lc", query })
+  if ok and stdout then
+    local path = stdout:match("(%S+)")
+    if path then
+      cached_git_tui = path
+      return path
+    end
+  end
+  cached_git_tui = false
+  return nil
+end
+
 local GUI_EDITORS = { "code", "cursor", "windsurf", "zed", "subl" }
 local gui_editor_set = {}
 for _, e in ipairs(GUI_EDITORS) do
@@ -668,6 +686,91 @@ function M.agent_selector(window, pane, deps)
   )
 end
 
+-- ============== Git selector (Cmd+Shift+G) ==============
+
+local function status_color(xy)
+  local x, y = xy:sub(1, 1), xy:sub(2, 2)
+  if x == "?" then return "Grey" end
+  if x ~= " " and y ~= " " then return "Yellow" end
+  if x ~= " " then return "Green" end
+  return "Red"
+end
+
+function M.git_selector(window, pane, deps)
+  local L = deps.opts.labels
+  local cwd_path = get_cwd_path(pane)
+  if not cwd_path then
+    toast(window, L.cannot_get_cwd)
+    return
+  end
+
+  local git_root = deps.worktree.get_git_root(cwd_path)
+  if not git_root then
+    toast(window, L.not_git_repo)
+    return
+  end
+
+  local files = deps.worktree.status(git_root)
+  local branch = deps.worktree.current_branch(git_root) or "HEAD"
+
+  local choices = {}
+
+  local git_tui = detect_git_tui(deps.opts.git_tui)
+  if git_tui then
+    local name = git_tui:match("([^/]+)$") or git_tui
+    table.insert(choices, { id = "tui", label = name })
+  end
+  if #files > 0 then table.insert(choices, { id = "diff_all", label = L.git_diff_all }) end
+
+  if #files > 0 then
+    table.insert(choices, { id = "_sep_changes", label = "── Changes ──" })
+    for _, f in ipairs(files) do
+      local fmt = {}
+      table.insert(fmt, { Foreground = { AnsiColor = status_color(f.xy) } })
+      table.insert(fmt, { Text = f.xy .. " " })
+      table.insert(fmt, "ResetAttributes")
+      table.insert(fmt, { Text = f.name })
+      table.insert(choices, { id = "file:" .. f.xy .. ":" .. f.name, label = wezterm.format(fmt) })
+    end
+  else
+    table.insert(choices, { id = "_sep_clean", label = "── " .. L.git_no_changes .. " ──" })
+  end
+
+  window:perform_action(
+    act.InputSelector({
+      title = branch .. " (" .. #files .. ")",
+      choices = choices,
+      fuzzy = true,
+      action = wezterm.action_callback(function(iw, ip, id)
+        if not id or id:match("^_sep_") then return end
+
+        if id == "tui" then
+          iw:perform_action(act.SpawnCommandInNewTab({ args = { git_tui }, cwd = git_root }), ip)
+          return
+        end
+
+        if id == "diff_all" then
+          iw:perform_action(act.SplitVertical({ args = { "git", "-C", git_root, "diff", "HEAD" }, cwd = git_root }), ip)
+          return
+        end
+
+        if id:match("^file:") then
+          local rest = id:sub(6)
+          local xy = rest:sub(1, 2)
+          local name = rest:sub(4)
+          if xy == "??" then
+            iw:perform_action(act.SplitVertical({ args = { "less", git_root .. "/" .. name }, cwd = git_root }), ip)
+          else
+            iw:perform_action(act.SplitVertical({ args = { "git", "-C", git_root, "diff", "HEAD", "--", name }, cwd = git_root }), ip)
+          end
+          return
+        end
+      end),
+    }),
+    pane
+  )
+end
+
 -- ============== Keybinds factory ==============
 
 local function is_last_window_in_workspace(window)
@@ -738,6 +841,13 @@ function M.build_keybinds(deps)
     key = "A",
     mods = "CMD|SHIFT",
     action = wezterm.action_callback(function(window, pane) M.agent_selector(window, pane, deps) end),
+  })
+
+  -- Git selector
+  add("git_selector", {
+    key = "G",
+    mods = "CMD|SHIFT",
+    action = wezterm.action_callback(function(window, pane) M.git_selector(window, pane, deps) end),
   })
 
   -- Open editor

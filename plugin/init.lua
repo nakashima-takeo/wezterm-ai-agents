@@ -76,6 +76,7 @@ local default_opts = {
   enabled_agents = nil, -- nil = all; or { "claude" } to register only specific agents
   default_agent = nil, -- nil = first registered; or "claude" to set default agent for Cmd+Shift+C
   default_editor = nil, -- nil = auto-detect (code/cursor/windsurf/zed/subl); or "/usr/local/bin/cursor" etc.
+  git_tui = nil, -- nil = auto-detect (lazygit/tig/gitui); or "lazygit" etc.
   agents = {
     -- agent-specific overrides, e.g. claude = { command = "claude --foo" }
   },
