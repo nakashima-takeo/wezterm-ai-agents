@@ -157,18 +157,48 @@ function M.detect(pane, plugin_opts)
   return nil, nil
 end
 
+-- Distinct status dirs to probe: plugin-level + any per-agent override.
+-- In the common single-dir setup this is one entry, so a pane is read once.
+local function candidate_dirs(plugin_opts)
+  local seen, dirs = {}, {}
+  local function add(d)
+    if d and not seen[d] then
+      seen[d] = true
+      dirs[#dirs + 1] = d
+    end
+  end
+  add(plugin_opts.status_dir)
+  if plugin_opts.agents then
+    for _, a in pairs(plugin_opts.agents) do
+      if type(a) == "table" then add(a.status_dir) end
+    end
+  end
+  return dirs
+end
+
+-- Read one pane's state once and classify it by data.agent.
+-- Replaces the old detect()-loop + state() double-read (problem 3).
+local function classify_pane(pane_id, dirs)
+  for _, dir in ipairs(dirs) do
+    local data = M.read_state_file(pane_id, dir)
+    if data and data.agent then
+      local impl = registry[data.agent]
+      if impl then return data.state or impl.default_state or "idle" end
+    end
+  end
+  return nil
+end
+
 -- Aggregate state counts across panes, optionally scoped to a workspace.
 function M.count(plugin_opts, ws_name)
   local counts = { working = 0, waiting = 0, done = 0, idle = 0, error = 0, unknown = 0 }
+  local dirs = candidate_dirs(plugin_opts)
   for _, win in ipairs(mux.all_windows()) do
     if not ws_name or win:get_workspace() == ws_name then
       for _, tab in ipairs(win:tabs()) do
         for _, p in ipairs(tab:panes()) do
-          local impl, agent_opts = M.detect(p, plugin_opts)
-          if impl then
-            local st = impl.state(p, agent_opts)
-            if counts[st] then counts[st] = counts[st] + 1 end
-          end
+          local st = classify_pane(p:pane_id(), dirs)
+          if st and counts[st] then counts[st] = counts[st] + 1 end
         end
       end
     end
