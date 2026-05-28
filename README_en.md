@@ -24,6 +24,7 @@ macOS / Linux. Windows is not supported.
 - WezTerm nightly (20230712+ recommended for plugin API)
 - [Nerd Font](https://www.nerdfonts.com/) (required for status icons. Set `nerd_font = false` for Unicode fallback if not installed)
 - git 2.7+ (required for `git worktree list --porcelain`)
+- [GitHub CLI (`gh`)](https://cli.github.com/) (optional; required for the worktree screen's PR badges, Pull Requests section, and opening PRs in the browser. Without it, those features simply don't appear)
 - bash (for hooks scripts)
 - Agent CLIs must be in PATH
 

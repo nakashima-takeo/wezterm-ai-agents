@@ -24,6 +24,7 @@ macOS / Linux。Windows は非対応。
 - WezTerm nightly（20230712 以降推奨、plugin API 使用のため）
 - [Nerd Font](https://www.nerdfonts.com/)（ステータスアイコン表示に必要。未導入の場合は `nerd_font = false` で Unicode フォールバックに切替可能）
 - git 2.7+（`git worktree list --porcelain` に必要）
+- [GitHub CLI (`gh`)](https://cli.github.com/)（任意。worktree 画面の PR バッジ・Pull Requests セクション・PR をブラウザで開く機能に必要。未導入なら該当機能が出ない）
 - bash（hooks スクリプト実行用）
 - 使用するエージェントの CLI が PATH に存在すること
 
