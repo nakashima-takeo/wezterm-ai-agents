@@ -18,6 +18,7 @@ AGENT="${1:?agent_id required}"
 STATUS="${2:-idle}"
 STATUS_DIR="${WEZTERM_AGENT_STATUS_DIR:-${TMPDIR:-/tmp}}"
 STATE_FILE="$STATUS_DIR/wezterm-agent-$WEZTERM_PANE"
+GEN_FILE="$STATUS_DIR/wezterm-agent-generation"
 
 INPUT=$(cat)
 
@@ -32,3 +33,6 @@ case "$STATUS" in
       && mv "$STATE_FILE.tmp" "$STATE_FILE"
     ;;
 esac
+
+# Bump generation counter so Lua-side cache is invalidated
+echo "$(date +%s).${RANDOM:-$$}" > "$GEN_FILE.tmp" && mv "$GEN_FILE.tmp" "$GEN_FILE"

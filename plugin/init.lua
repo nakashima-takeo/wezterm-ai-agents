@@ -206,13 +206,16 @@ function M.apply(config, user_opts)
   if opts.install_ui_tab_title then
     wezterm.on(
       "format-tab-title",
-      function(tab, tabs, _panes, _config, _hover, max_width) return ui.format_tab_title(tab, deps, max_width, #tabs) end
+      function(tab, tabs, _panes, _config, _hover, max_width)
+        agent.begin_tick(opts.status_dir)
+        return ui.format_tab_title(tab, deps, max_width, #tabs)
+      end
     )
   end
 
   if opts.install_ui_status then
-    local last_status_tick = 0
     local last_sync_tick = 0
+    local last_status_text = {}
     local prev_win_id = nil
     wezterm.on("update-status", function(window, pane)
       local now = os.time()
@@ -222,12 +225,15 @@ function M.apply(config, user_opts)
         selector.pinned_windows[win_id] = true
       end
       prev_win_id = win_id
-      if (now - last_status_tick) >= opts.status_update_interval then
-        last_status_tick = now
-        local impl, agent_opts = agent.detect(pane, opts)
-        if impl and impl.consume_done then pcall(impl.consume_done, pane, agent_opts) end
-        local segs = ui.right_status_segments(window, pane, deps)
-        window:set_right_status(wezterm.format(segs))
+      agent.begin_tick(opts.status_dir)
+      -- Per-agent UX hook: clear "done" indicator on the focused pane.
+      local impl, agent_opts = agent.detect(pane, opts)
+      if impl and impl.consume_done then pcall(impl.consume_done, pane, agent_opts) end
+      local segs = ui.right_status_segments(window, pane, deps)
+      local text = wezterm.format(segs)
+      if text ~= last_status_text[win_id] then
+        last_status_text[win_id] = text
+        window:set_right_status(text)
       end
       if (now - last_sync_tick) >= opts.session_sync_interval then
         last_sync_tick = now

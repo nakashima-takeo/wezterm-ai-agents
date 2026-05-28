@@ -21,15 +21,70 @@ local M = {}
 
 function M.shell_quote(s) return "'" .. s:gsub("'", "'\\''") .. "'" end
 
+-- ============== State cache ==============
+-- Per-pane state is cached and only refreshed when the generation counter
+-- (bumped by hooks/agent_status.sh) changes.  This eliminates the per-pane
+-- file reads that previously ran on every update-status tick.
+
+local state_cache = {}
+local cache_generation = nil
+local CACHE_NIL = {} -- sentinel: "checked, file absent"
+local last_gen_check = 0
+
+function M.begin_tick(status_dir)
+  local now = os.time()
+  if now == last_gen_check then return end
+  last_gen_check = now
+
+  local path = status_dir .. "/wezterm-agent-generation"
+  local f = io.open(path, "r")
+  local gen = nil
+  if f then
+    gen = f:read("*l")
+    f:close()
+  end
+  if gen ~= cache_generation then
+    state_cache = {}
+    cache_generation = gen
+  end
+end
+
+function M.bump_generation(status_dir)
+  local gen = tostring(os.time()) .. "." .. tostring(math.random(100000))
+  local path = status_dir .. "/wezterm-agent-generation"
+  local f = io.open(path, "w")
+  if f then
+    f:write(gen .. "\n")
+    f:close()
+  end
+  cache_generation = gen
+  last_gen_check = os.time()
+end
+
 function M.read_state_file(pane_id, status_dir)
+  local key = tostring(pane_id)
+  local cached = state_cache[key]
+  if cached == CACHE_NIL then return nil end
+  if cached ~= nil then return cached end
+
   local path = status_dir .. "/wezterm-agent-" .. pane_id
   local f = io.open(path, "r")
-  if not f then return nil end
+  if not f then
+    state_cache[key] = CACHE_NIL
+    return nil
+  end
   local raw = f:read("*a")
   f:close()
-  if not raw or raw == "" then return nil end
+  if not raw or raw == "" then
+    state_cache[key] = CACHE_NIL
+    return nil
+  end
   local ok, data = pcall(wezterm.json_parse, raw)
-  if not ok or type(data) ~= "table" then return nil end
+  if not ok or type(data) ~= "table" then
+    state_cache[key] = CACHE_NIL
+    return nil
+  end
+  state_cache[key] = data
   return data
 end
 
@@ -37,17 +92,22 @@ function M.cleanup_stale_files(agent_id, opts)
   local dir = opts.status_dir
   local ok, entries = pcall(wezterm.read_dir, dir)
   if not ok or not entries then return end
+  local removed = false
   for _, path in ipairs(entries) do
-    if path:match("/wezterm%-agent%-") then
+    if path:match("/wezterm%-agent%-") and not path:match("%-generation$") then
       local f = io.open(path, "r")
       if f then
         local raw = f:read("*a")
         f:close()
         local ok2, data = pcall(wezterm.json_parse, raw or "")
-        if ok2 and type(data) == "table" and data.agent == agent_id then os.remove(path) end
+        if ok2 and type(data) == "table" and data.agent == agent_id then
+          os.remove(path)
+          removed = true
+        end
       end
     end
   end
+  if removed then M.bump_generation(dir) end
 end
 
 local registry = {}
@@ -84,21 +144,19 @@ function M.register(impl)
 
   if not impl.consume_done then
     impl.consume_done = function(pane, opts)
-      local path = opts.status_dir .. "/wezterm-agent-" .. pane:pane_id()
-      local f = io.open(path, "r")
-      if not f then return false end
-      local raw = f:read("*a")
-      f:close()
-      if not raw or raw == "" then return false end
-      local ok, data = pcall(wezterm.json_parse, raw)
-      if not ok or type(data) ~= "table" then return false end
+      local pane_id = pane:pane_id()
+      local data = M.read_state_file(pane_id, opts.status_dir)
+      if not data then return false end
       if data.state ~= "done" or data.agent ~= agent_id then return false end
       data.state = fallback
       data.ts = os.time()
+      local path = opts.status_dir .. "/wezterm-agent-" .. pane_id
       local wf = io.open(path, "w")
       if not wf then return false end
       wf:write(wezterm.json_encode(data) .. "\n")
       wf:close()
+      state_cache[tostring(pane_id)] = data
+      M.bump_generation(opts.status_dir)
       return true
     end
   end
