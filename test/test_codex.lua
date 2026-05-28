@@ -1,6 +1,6 @@
 package.path = package.path .. ";test/?.lua"
 local H = require("helper")
-local test, load_agent = H.test, H.load_agent
+local test, load_agent, load_mod = H.test, H.load_agent, H.load_mod
 
 H.section("Codex 状態追跡")
 
@@ -114,8 +114,9 @@ end)
 H.section("Codex セッション起動コマンド生成")
 
 test("正常系：シェル経由でCodexを起動するコマンドを生成する", function()
+  local agent = load_mod("agent")
   local codex = load_agent("agents/codex")
-  local opts = { command = "codex", shell = "/bin/zsh", status_dir = "/tmp" }
+  local opts = agent.opts_for(codex, { status_dir = "/tmp", agents = { codex = { shell = "/bin/zsh" } } })
 
   local args = codex.spawn_args(opts)
 
@@ -126,8 +127,9 @@ test("正常系：シェル経由でCodexを起動するコマンドを生成す
 end)
 
 test("正常系：session_id指定時はresumeサブコマンドで起動する", function()
+  local agent = load_mod("agent")
   local codex = load_agent("agents/codex")
-  local opts = { command = "codex", shell = "/bin/zsh", status_dir = "/tmp" }
+  local opts = agent.opts_for(codex, { status_dir = "/tmp", agents = { codex = { shell = "/bin/zsh" } } })
 
   local args = codex.spawn_args(opts, "019d2fac-0b38")
 
@@ -135,8 +137,9 @@ test("正常系：session_id指定時はresumeサブコマンドで起動する"
 end)
 
 test("正常系：cwd指定時は--cdフラグで起動する", function()
+  local agent = load_mod("agent")
   local codex = load_agent("agents/codex")
-  local opts = { command = "codex", shell = "/bin/zsh", status_dir = "/tmp" }
+  local opts = agent.opts_for(codex, { status_dir = "/tmp", agents = { codex = { shell = "/bin/zsh" } } })
 
   local args = codex.spawn_args(opts, nil, "/home/user/project")
 
@@ -144,8 +147,9 @@ test("正常系：cwd指定時は--cdフラグで起動する", function()
 end)
 
 test("正常系：cwd+session_id両方指定時はresumeサブコマンドに--cdを渡す", function()
+  local agent = load_mod("agent")
   local codex = load_agent("agents/codex")
-  local opts = { command = "codex", shell = "/bin/zsh", status_dir = "/tmp" }
+  local opts = agent.opts_for(codex, { status_dir = "/tmp", agents = { codex = { shell = "/bin/zsh" } } })
 
   local args = codex.spawn_args(opts, "sess-1", "/home/user/project")
 

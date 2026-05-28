@@ -11,7 +11,7 @@
 -- Optional (injected by register() if not provided):
 --   default_state : fallback state when file is absent (default "idle")
 --   detect, state, session_id, consume_done, cleanup_stale, spawn_args
--- Injected unconditionally:
+-- spawn_args receives agent_opts (from opts_for), which carries:
 --   shell_quote(s) — POSIX single-quote escaping utility
 
 local wezterm = require("wezterm")
@@ -105,8 +105,6 @@ function M.register(impl)
 
   if not impl.cleanup_stale then impl.cleanup_stale = function(opts) M.cleanup_stale_files(agent_id, opts) end end
 
-  impl.shell_quote = M.shell_quote
-
   if not impl.spawn_args then
     impl.spawn_args = function(opts, session_id, cwd)
       local cmd = opts.command
@@ -144,6 +142,7 @@ function M.opts_for(agent_impl, plugin_opts)
     out[k] = v
   end
   if not out.status_dir and plugin_opts.status_dir then out.status_dir = plugin_opts.status_dir end
+  out.shell_quote = M.shell_quote
   return out
 end
 

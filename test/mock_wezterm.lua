@@ -27,6 +27,7 @@ function M.format(parts)
 end
 
 function M.truncate_right(s, n) return (s or ""):sub(1, n) end
+function M.truncate_left(s, n) return (s or ""):sub(-n) end
 
 function M.log_info(...) print("[wezterm.log_info]", ...) end
 function M.log_error(...)
