@@ -206,7 +206,7 @@ function M.apply(config, user_opts)
   if opts.install_ui_tab_title then
     wezterm.on(
       "format-tab-title",
-      function(tab, _tabs, _panes, _config, _hover, max_width) return ui.format_tab_title(tab, deps, max_width) end
+      function(tab, tabs, _panes, _config, _hover, max_width) return ui.format_tab_title(tab, deps, max_width, #tabs) end
     )
   end
 
