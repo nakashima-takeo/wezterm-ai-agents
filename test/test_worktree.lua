@@ -40,6 +40,18 @@ test("git_root変数がテンプレートで使える", function()
   H.assert_eq(worktree.resolve_path("{git_root}/.wt/{branch}", "/home/user/repo", "dev"), "/home/user/repo/.wt/dev")
 end)
 
+test("ブランチ名の%がエスケープされて消えない", function()
+  local worktree = load_mod("worktree")
+
+  H.assert_eq(worktree.resolve_path("sibling", "/home/user/repo", "fix%20bug"), "/home/user/repo__worktrees/fix%20bug")
+end)
+
+test("git_rootの%でクラッシュせず正しく展開される", function()
+  local worktree = load_mod("worktree")
+
+  H.assert_eq(worktree.resolve_path("sibling", "/home/user/100%done", "dev"), "/home/user/100%done__worktrees/dev")
+end)
+
 H.section("worktree add のパス生成")
 
 test("addはデフォルト(sibling)でパスを生成する", function()

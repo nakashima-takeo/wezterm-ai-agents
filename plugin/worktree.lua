@@ -21,12 +21,17 @@ end
 
 function M.is_tmp_branch(branch) return branch ~= nil and branch:sub(1, #TMP_BRANCH_PREFIX) == TMP_BRANCH_PREFIX end
 
+-- gsub の置換文字列では % が特殊扱いされるため、置換値の % を %% にエスケープする
+local function esc(s) return (s:gsub("%%", "%%%%")) end
+
 function M.resolve_path(template, git_root, branch)
   local repo = git_root:match("([^/]+)$") or "repo"
   local parent = git_root:match("^(.+)/[^/]+$") or git_root
   local safe_branch = branch:gsub("/", "-")
   local pattern = PRESETS[template] or template
-  return (pattern:gsub("{git_root}", git_root):gsub("{parent}", parent):gsub("{repo}", repo):gsub("{branch}", safe_branch))
+  return (
+    pattern:gsub("{git_root}", esc(git_root)):gsub("{parent}", esc(parent)):gsub("{repo}", esc(repo)):gsub("{branch}", esc(safe_branch))
+  )
 end
 
 function M.get_git_root(cwd)
