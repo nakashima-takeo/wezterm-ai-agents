@@ -381,6 +381,21 @@ local function create_worktree(window, git_root, branch, is_new, local_name, dep
   return wt_path
 end
 
+local function create_pr_worktree(window, git_root, number, deps)
+  local L = deps.opts.labels
+  local branch = "pr-" .. tostring(number)
+  local ok, wt_path, stderr = deps.worktree.add_pr_worktree(git_root, number, deps.opts)
+  if not ok then
+    local err = stderr and stderr:gsub("%s+$", "") or ""
+    local m = string.format(L.wt_create_failed, branch)
+    if err ~= "" then m = m .. "\n" .. err end
+    toast(window, m, 5000)
+    return nil
+  end
+  toast(window, string.format(L.wt_created, branch))
+  return wt_path
+end
+
 local function open_agent_tab_in_cwd(window, pane, cwd, agent_impl, deps)
   local opts = deps.opts
   deps.layout.add_tab(window, agent_impl and agent_impl.id or nil, deps.workspace, opts)
@@ -394,7 +409,7 @@ local function open_agent_tab_in_cwd(window, pane, cwd, agent_impl, deps)
   end
 end
 
-local function show_worktree_action_menu(window, pane, wt_path, branch, is_main, base_ws, git_root, cwd_path, deps, pending)
+local function show_worktree_action_menu(window, pane, wt_path, branch, is_main, base_ws, git_root, cwd_path, deps, pending, pr)
   local L = deps.opts.labels
   local choices = {}
   local agents = deps.agent.all()
@@ -405,16 +420,19 @@ local function show_worktree_action_menu(window, pane, wt_path, branch, is_main,
   end
 
   local ws_name = deps.worktree.workspace_name_for(base_ws, branch, is_main)
+  local manage = {}
   if pending then
-    table.insert(choices, { id = "_sep_other", label = "── Manage ──" })
-    table.insert(choices, { id = "workspace", label = L.register_ws })
+    table.insert(manage, { id = "workspace", label = L.register_ws })
   else
     local in_wt = cwd_path == wt_path or (cwd_path and cwd_path:find(wt_path .. "/", 1, true))
-    local has_other = not deps.workspace.exists(ws_name) or (not is_main and not in_wt)
-    if has_other then
-      table.insert(choices, { id = "_sep_other", label = "── Manage ──" })
-      if not deps.workspace.exists(ws_name) then table.insert(choices, { id = "workspace", label = L.register_ws }) end
-      if not is_main and not in_wt then table.insert(choices, { id = "delete", label = L.delete_wt }) end
+    if not deps.workspace.exists(ws_name) then table.insert(manage, { id = "workspace", label = L.register_ws }) end
+    if not is_main and not in_wt then table.insert(manage, { id = "delete", label = L.delete_wt }) end
+  end
+  if pr then table.insert(manage, { id = "open_pr", label = L.open_pr }) end
+  if #manage > 0 then
+    table.insert(choices, { id = "_sep_other", label = "── Manage ──" })
+    for _, c in ipairs(manage) do
+      table.insert(choices, c)
     end
   end
 
@@ -425,8 +443,16 @@ local function show_worktree_action_menu(window, pane, wt_path, branch, is_main,
       fuzzy = true,
       action = wezterm.action_callback(function(iw, ip, id)
         if not id or id:match("^_sep_") then return end
+        if id == "open_pr" then
+          deps.worktree.open_pr_web(git_root, pr.number)
+          return
+        end
         if pending then
-          wt_path = create_worktree(iw, git_root, pending.branch, pending.is_new, pending.local_name, deps)
+          if pending.pr_number then
+            wt_path = create_pr_worktree(iw, git_root, pending.pr_number, deps)
+          else
+            wt_path = create_worktree(iw, git_root, pending.branch, pending.is_new, pending.local_name, deps)
+          end
           if not wt_path then return end
         end
         if id:match("^tab:") then
@@ -570,6 +596,33 @@ function M.worktree_selector(window, pane, deps)
     end
   end
 
+  local reachable = {}
+  for _, wt in ipairs(worktrees) do
+    if wt.branch then reachable[wt.branch] = true end
+  end
+  for _, b in ipairs(branch_info.local_branches) do
+    reachable[b] = true
+  end
+  for _, b in ipairs(branch_info.remote_branches) do
+    reachable[b.local_name] = true
+  end
+  local pr_list = deps.worktree.uncovered_prs(deps.worktree.pull_request_list(git_root), reachable)
+  if #pr_list > 0 then
+    table.insert(choices, { id = "_sep_pr", label = "── Pull Requests ──" })
+    for _, pr in ipairs(pr_list) do
+      local color = pr.state == "MERGED" and "Purple" or (pr.state == "CLOSED" and "Maroon" or "Green")
+      local text = pr.headRefName
+      if pr.owner then text = text .. " (@" .. pr.owner .. ")" end
+      local fmt = {
+        { Foreground = { AnsiColor = color } },
+        { Text = "\xEF\x90\x87 #" .. tostring(pr.number) .. " " },
+        "ResetAttributes",
+        { Text = text },
+      }
+      table.insert(choices, { id = "pr:" .. tostring(pr.number), label = wezterm.format(fmt) })
+    end
+  end
+
   window:perform_action(
     act.InputSelector({
       title = "Worktree",
@@ -580,11 +633,40 @@ function M.worktree_selector(window, pane, deps)
 
         if id:match("^switch:") then
           local _, wt_path, branch, is_main_str = id:match("^(switch):(.+):([^:]+):([^:]+)$")
-          show_worktree_action_menu(iw, ip, wt_path, branch, is_main_str == "true", base_ws, git_root, cwd_path, deps)
+          show_worktree_action_menu(iw, ip, wt_path, branch, is_main_str == "true", base_ws, git_root, cwd_path, deps, nil, prs[branch])
           return
         end
 
         if id:match("^_sep_") then return end
+
+        local pr_num = id:match("^pr:(%d+)$")
+        if pr_num then
+          local n = tonumber(pr_num)
+          local rec
+          for _, p in ipairs(pr_list) do
+            if p.number == n then
+              rec = p
+              break
+            end
+          end
+          if rec then
+            local pr_branch = "pr-" .. tostring(n)
+            show_worktree_action_menu(
+              iw,
+              ip,
+              nil,
+              pr_branch,
+              false,
+              base_ws,
+              git_root,
+              cwd_path,
+              deps,
+              { branch = pr_branch, pr_number = n },
+              rec
+            )
+          end
+          return
+        end
 
         if id == "fetch_remote" then
           local ok = deps.worktree.fetch(git_root)
@@ -607,7 +689,8 @@ function M.worktree_selector(window, pane, deps)
               git_root,
               cwd_path,
               deps,
-              { branch = ref, local_name = local_name, is_new = false }
+              { branch = ref, local_name = local_name, is_new = false },
+              prs[local_name]
             )
           end
           return
