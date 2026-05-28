@@ -468,6 +468,22 @@ local function show_worktree_action_menu(window, pane, wt_path, branch, is_main,
   )
 end
 
+-- ワークスペース切替を検知し、リポジトリごとに最大1回/30秒で fetch+gh を裏で先読みする。
+M.prefetch_state = { ws = nil, last = {} }
+function M.maybe_prefetch(window, pane, deps)
+  local ws = window:active_workspace()
+  if ws == M.prefetch_state.ws then return end
+  M.prefetch_state.ws = ws
+  local cwd = get_cwd_path(pane)
+  if not cwd then return end
+  local git_root = deps.worktree.get_git_root(cwd)
+  if not git_root then return end
+  local now = os.time()
+  if (now - (M.prefetch_state.last[git_root] or 0)) < 30 then return end
+  M.prefetch_state.last[git_root] = now
+  deps.worktree.prefetch(git_root)
+end
+
 function M.worktree_selector(window, pane, deps)
   local L = deps.opts.labels
   local cwd_path = get_cwd_path(pane)
@@ -484,6 +500,14 @@ function M.worktree_selector(window, pane, deps)
 
   local base_ws = deps.worktree.base_workspace_name(window)
   local worktrees = deps.worktree.list(git_root)
+  local prs = deps.worktree.pull_requests(git_root)
+
+  local function pr_marker(branch)
+    local pr = prs[branch]
+    if not pr then return nil end
+    local color = pr.state == "MERGED" and "Purple" or (pr.state == "CLOSED" and "Maroon" or "Green")
+    return { { Foreground = { AnsiColor = color } }, { Text = " \xEF\x90\x87 #" .. tostring(pr.number) }, "ResetAttributes" }
+  end
 
   local choices = {}
   local has_detached = false
@@ -509,6 +533,12 @@ function M.worktree_selector(window, pane, deps)
       table.insert(fmt, { Text = "\xEE\x9C\xA5 " })
       table.insert(fmt, "ResetAttributes")
       table.insert(fmt, { Text = wt.branch })
+      local marker = pr_marker(wt.branch)
+      if marker then
+        for _, x in ipairs(marker) do
+          table.insert(fmt, x)
+        end
+      end
       table.insert(choices, {
         id = "switch:" .. wt.path .. ":" .. wt.branch .. ":" .. tostring(is_main),
         label = wezterm.format(fmt),
@@ -516,17 +546,27 @@ function M.worktree_selector(window, pane, deps)
     end
   end
 
+  local function branch_label(text, branch)
+    local marker = pr_marker(branch)
+    if not marker then return "  " .. text end
+    local fmt = { { Text = "  " .. text } }
+    for _, x in ipairs(marker) do
+      table.insert(fmt, x)
+    end
+    return wezterm.format(fmt)
+  end
+
   local branch_info = deps.worktree.branches(git_root, worktrees)
   if #branch_info.local_branches > 0 then
     table.insert(choices, { id = "_sep_local", label = "── Local Branch ──" })
     for _, b in ipairs(branch_info.local_branches) do
-      table.insert(choices, { id = "auto_create:" .. b .. ":" .. b, label = "  " .. b })
+      table.insert(choices, { id = "auto_create:" .. b .. ":" .. b, label = branch_label(b, b) })
     end
   end
   if #branch_info.remote_branches > 0 then
     table.insert(choices, { id = "_sep_remote", label = "── Remote Branch ──" })
     for _, b in ipairs(branch_info.remote_branches) do
-      table.insert(choices, { id = "auto_create:" .. b.display .. ":" .. b.local_name, label = "  " .. b.display })
+      table.insert(choices, { id = "auto_create:" .. b.display .. ":" .. b.local_name, label = branch_label(b.display, b.local_name) })
     end
   end
 
@@ -548,6 +588,7 @@ function M.worktree_selector(window, pane, deps)
 
         if id == "fetch_remote" then
           local ok = deps.worktree.fetch(git_root)
+          deps.worktree.refresh_pr_cache(git_root)
           toast(iw, ok and L.fetch_done or L.fetch_failed)
           M.worktree_selector(iw, ip, deps)
           return

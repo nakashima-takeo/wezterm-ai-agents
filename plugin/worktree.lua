@@ -157,4 +157,52 @@ function M.prune(git_root) wezterm.run_child_process({ "git", "-C", git_root, "w
 
 function M.fetch(git_root) return wezterm.run_child_process({ "git", "-C", git_root, "fetch", "--prune" }) end
 
+-- POSIX シングルクォートエスケープ (gh を cwd 指定で動かすため sh -lc に渡す)
+local function shq(s) return "'" .. s:gsub("'", "'\\''") .. "'" end
+
+local function pr_cache_file(git_root)
+  local dir = (os.getenv("TMPDIR") or "/tmp"):gsub("/$", "")
+  return dir .. "/wezterm-pr-" .. git_root:gsub("[^%w]", "_") .. ".json"
+end
+
+local GH_PR_LIST = "gh pr list --json number,headRefName,state --limit 200"
+
+-- ワークスペース切替時に呼ぶ。git fetch と gh pr list を裏で並列実行 (UI 非ブロッキング)。
+-- gh の結果はキャッシュファイルへ書き出し、worktree 画面はそれを読むだけにする。
+function M.prefetch(git_root)
+  wezterm.background_child_process({ "git", "-C", git_root, "fetch", "--prune" })
+  local cache = pr_cache_file(git_root)
+  local tmp = shq(cache .. ".tmp")
+  local cmd = ("cd %s && %s > %s 2>/dev/null && mv %s %s"):format(shq(git_root), GH_PR_LIST, tmp, tmp, shq(cache))
+  wezterm.background_child_process({ "/bin/sh", "-lc", cmd })
+end
+
+-- 手動 fetch 用。gh を同期実行してキャッシュを即時更新する。
+function M.refresh_pr_cache(git_root)
+  local ok, stdout = wezterm.run_child_process({ "/bin/sh", "-lc", "cd " .. shq(git_root) .. " && " .. GH_PR_LIST .. " 2>/dev/null" })
+  if ok and stdout and stdout ~= "" then
+    local f = io.open(pr_cache_file(git_root), "w")
+    if f then
+      f:write(stdout)
+      f:close()
+    end
+  end
+end
+
+-- キャッシュから { [branch] = { number, state } } のマップを返す。なければ空表。
+function M.pull_requests(git_root)
+  local f = io.open(pr_cache_file(git_root), "r")
+  if not f then return {} end
+  local raw = f:read("*a")
+  f:close()
+  if not raw or raw == "" then return {} end
+  local ok, data = pcall(wezterm.json_parse, raw)
+  if not ok or type(data) ~= "table" then return {} end
+  local map = {}
+  for _, pr in ipairs(data) do
+    if pr.headRefName then map[pr.headRefName] = { number = pr.number, state = pr.state } end
+  end
+  return map
+end
+
 return M
