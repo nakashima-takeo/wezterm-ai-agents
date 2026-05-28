@@ -220,11 +220,34 @@ end
 -- キャッシュから open PR の配列を返す。
 function M.pull_request_list(git_root) return M.parse_pr_list(read_pr_cache(git_root)) end
 
--- キャッシュから { [branch] = { number, state } } のマップを返す。バッジ/番号引き用。
+-- git config の branch.<name>.merge=refs/pull/<N>/head 刻印を { [branch] = number } で返す。
+-- gh pr checkout / add_pr_worktree が刻んだ印を読み、ブランチ名に依存せず PR を逆引きする。
+function M.pr_branch_config(git_root)
+  local out = {}
+  local ok, stdout = wezterm.run_child_process({ "git", "-C", git_root, "config", "--get-regexp", "^branch\\..*\\.merge$" })
+  if not ok or not stdout then return out end
+  for line in stdout:gmatch("[^\n]+") do
+    local key, val = line:match("^(%S+)%s+(.+)$")
+    local number = val and val:match("^refs/pull/(%d+)/head$")
+    local branch = key and key:match("^branch%.(.+)%.merge$")
+    if number and branch then out[branch] = tonumber(number) end
+  end
+  return out
+end
+
+-- { [branch] = { number, state } } のマップを返す。バッジ/番号引き用。
+-- 主軸は git config 刻印 (branch.<name>.merge) による PR 番号逆引き (ブランチ名非依存)。
+-- 同一リポ PR はブランチが PR の head そのものなので headRefName でも引ける。
 function M.pull_requests(git_root)
   local map = {}
+  local by_number = {}
   for _, pr in ipairs(M.pull_request_list(git_root)) do
-    map[pr.headRefName] = { number = pr.number, state = pr.state }
+    local rec = { number = pr.number, state = pr.state }
+    by_number[pr.number] = rec
+    map[pr.headRefName] = rec
+  end
+  for branch, number in pairs(M.pr_branch_config(git_root)) do
+    if by_number[number] then map[branch] = by_number[number] end
   end
   return map
 end
@@ -242,11 +265,14 @@ function M.uncovered_prs(pr_list, reachable)
 end
 
 -- PR の head を pr-<N> ローカルブランチとして取り寄せ、worktree を作る。
+-- gh pr checkout と同じく branch.<name>.merge=refs/pull/N/head を刻み、ブランチ名に依存せず PR を逆引きできるようにする。
 function M.add_pr_worktree(git_root, number, opts)
   local branch = "pr-" .. tostring(number)
   local refspec = ("pull/%d/head:%s"):format(number, branch)
   local ok, _, stderr = wezterm.run_child_process({ "git", "-C", git_root, "fetch", "origin", refspec })
   if not ok then return false, nil, stderr end
+  wezterm.run_child_process({ "git", "-C", git_root, "config", ("branch.%s.remote"):format(branch), "origin" })
+  wezterm.run_child_process({ "git", "-C", git_root, "config", ("branch.%s.merge"):format(branch), ("refs/pull/%d/head"):format(number) })
   local template = (opts and opts.worktree and opts.worktree.path) or "sibling"
   local wt_path = M.resolve_path(template, git_root, branch)
   local ok2, _, stderr2 = wezterm.run_child_process({ "git", "-C", git_root, "worktree", "add", wt_path, branch })

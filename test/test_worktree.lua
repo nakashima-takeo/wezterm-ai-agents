@@ -264,6 +264,39 @@ test("pull_requestsはキャッシュからheadRefName→{number,state}のmapを
   H.assert_nil(map["feat/b"])
 end)
 
+test("pr_branch_configはbranch.<name>.merge刻印からPR番号を逆引きする", function()
+  local worktree = load_mod("worktree")
+  local original = wezterm.run_child_process
+  wezterm.run_child_process = function()
+    return true, "branch.pr-12.merge refs/pull/12/head\nbranch.my-fix.merge refs/pull/9/head\nbranch.main.merge refs/heads/main\n"
+  end
+
+  local cfg = worktree.pr_branch_config("/tmp/x")
+
+  wezterm.run_child_process = original
+  H.assert_eq(cfg["pr-12"], 12)
+  H.assert_eq(cfg["my-fix"], 9) -- リネーム済みでも刻印で逆引きできる
+  H.assert_nil(cfg["main"]) -- refs/pull 以外は無視
+end)
+
+test("pull_requestsはconfig刻印でブランチ名非依存に紐づける", function()
+  local worktree = load_mod("worktree")
+  local git_root = "/tmp/__wt_pr_cfg_test"
+  local dir = (os.getenv("TMPDIR") or "/tmp"):gsub("/$", "")
+  local cache = dir .. "/wezterm-pr-" .. git_root:gsub("[^%w]", "_") .. ".json"
+  H.write_file(cache, '[{"number":12,"headRefName":"feat/fork","state":"OPEN","isCrossRepository":true}]')
+  local original = wezterm.run_child_process
+  wezterm.run_child_process = function() return true, "branch.renamed.merge refs/pull/12/head\n" end
+
+  local map = worktree.pull_requests(git_root)
+
+  wezterm.run_child_process = original
+  os.remove(cache)
+  H.assert_eq(map["renamed"].number, 12) -- 刻印で別名ブランチでも紐づく
+  H.assert_eq(map["feat/fork"].number, 12) -- headRefName 経路は維持
+  H.assert_nil(map["pr-12"]) -- pr-N 名照合は廃止
+end)
+
 H.section("到達不能PRの抽出")
 
 test("uncovered_prs：fork PRはheadRefNameがローカル同名でも残す", function()
@@ -312,12 +345,17 @@ test("add_pr_worktree：fetchしてpr-Nのworktreeを作る", function()
   wezterm.run_child_process = original
   H.assert_true(ok)
   H.assert_eq(wt_path, "/home/user/repo__worktrees/pr-12")
-  H.assert_eq(#calls, 2)
+  H.assert_eq(#calls, 4)
   H.assert_eq(calls[1][#calls[1] - 2], "fetch")
   H.assert_eq(calls[1][#calls[1] - 1], "origin")
   H.assert_eq(calls[1][#calls[1]], "pull/12/head:pr-12")
-  H.assert_eq(calls[2][#calls[2] - 1], "/home/user/repo__worktrees/pr-12")
-  H.assert_eq(calls[2][#calls[2]], "pr-12")
+  -- gh pr checkout 同等の刻印 (ブランチ名に依存しない PR 逆引き用)
+  H.assert_eq(calls[2][#calls[2] - 1], "branch.pr-12.remote")
+  H.assert_eq(calls[2][#calls[2]], "origin")
+  H.assert_eq(calls[3][#calls[3] - 1], "branch.pr-12.merge")
+  H.assert_eq(calls[3][#calls[3]], "refs/pull/12/head")
+  H.assert_eq(calls[4][#calls[4] - 1], "/home/user/repo__worktrees/pr-12")
+  H.assert_eq(calls[4][#calls[4]], "pr-12")
 end)
 
 test("add_pr_worktree：fetch失敗時はworktree addしない", function()
