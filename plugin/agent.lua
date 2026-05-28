@@ -176,18 +176,21 @@ local function candidate_dirs(plugin_opts)
   return dirs
 end
 
--- Read one pane's state once and classify it by data.agent.
--- Replaces the old detect()-loop + state() double-read (problem 3).
-local function classify_pane(pane_id, dirs)
+-- Resolve (impl, state) for one pane in a SINGLE status-file read.
+-- Unifies the old detect()+state() double-read shared by count and tab title.
+local function resolve_in_dirs(pane_id, dirs)
   for _, dir in ipairs(dirs) do
     local data = M.read_state_file(pane_id, dir)
     if data and data.agent then
       local impl = registry[data.agent]
-      if impl then return data.state or impl.default_state or "idle" end
+      if impl then return impl, data.state or impl.default_state or "idle" end
     end
   end
-  return nil
+  return nil, nil
 end
+
+-- Public single-read resolver, used by tab-title rendering (one pane at a time).
+function M.resolve(pane_id, plugin_opts) return resolve_in_dirs(pane_id, candidate_dirs(plugin_opts)) end
 
 -- Aggregate state counts across panes, optionally scoped to a workspace.
 function M.count(plugin_opts, ws_name)
@@ -197,7 +200,7 @@ function M.count(plugin_opts, ws_name)
     if not ws_name or win:get_workspace() == ws_name then
       for _, tab in ipairs(win:tabs()) do
         for _, p in ipairs(tab:panes()) do
-          local st = classify_pane(p:pane_id(), dirs)
+          local _, st = resolve_in_dirs(p:pane_id(), dirs)
           if st and counts[st] then counts[st] = counts[st] + 1 end
         end
       end
