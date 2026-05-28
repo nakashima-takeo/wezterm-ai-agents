@@ -235,6 +235,15 @@ function M.pr_branch_config(git_root)
   return out
 end
 
+-- 刻印から「ローカルに取り込み済みの PR 番号」の集合 { [number] = true } を返す。
+function M.materialized_prs(git_root)
+  local out = {}
+  for _, number in pairs(M.pr_branch_config(git_root)) do
+    out[number] = true
+  end
+  return out
+end
+
 -- { [branch] = { number, state } } のマップを返す。バッジ/番号引き用。
 -- 主軸は git config 刻印 (branch.<name>.merge) による PR 番号逆引き (ブランチ名非依存)。
 -- 同一リポ PR はブランチが PR の head そのものなので headRefName でも引ける。
@@ -254,12 +263,14 @@ end
 
 -- ブランチとして到達できない PR (主に fork) だけを返す純関数。
 -- reachable: 既に画面に出ているブランチ名の集合 (worktree/local/remote)。
-function M.uncovered_prs(pr_list, reachable)
+-- materialized: 刻印で取り込み済みの PR 番号集合 { [number] = true } (ブランチ名非依存)。
+function M.uncovered_prs(pr_list, reachable, materialized)
+  materialized = materialized or {}
   local out = {}
   for _, pr in ipairs(pr_list) do
-    local materialized = reachable["pr-" .. tostring(pr.number)] -- pr-<N> 取り込み済み
+    local taken = materialized[pr.number] -- 刻印で取り込み済み
     local shown_as_branch = not pr.fork and reachable[pr.headRefName] -- 同一リポPRで既出
-    if not materialized and not shown_as_branch then table.insert(out, pr) end
+    if not taken and not shown_as_branch then table.insert(out, pr) end
   end
   return out
 end

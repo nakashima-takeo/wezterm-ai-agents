@@ -297,6 +297,18 @@ test("pull_requestsはconfig刻印でブランチ名非依存に紐づける", f
   H.assert_nil(map["pr-12"]) -- pr-N 名照合は廃止
 end)
 
+test("materialized_prsは刻印から取り込み済みPR番号集合を返す", function()
+  local worktree = load_mod("worktree")
+  local original = wezterm.run_child_process
+  wezterm.run_child_process = function() return true, "branch.pr-12.merge refs/pull/12/head\nbranch.main.merge refs/heads/main\n" end
+
+  local set = worktree.materialized_prs("/tmp/x")
+
+  wezterm.run_child_process = original
+  H.assert_true(set[12])
+  H.assert_nil(set[99])
+end)
+
 H.section("到達不能PRの抽出")
 
 test("uncovered_prs：fork PRはheadRefNameがローカル同名でも残す", function()
@@ -315,11 +327,18 @@ test("uncovered_prs：fork PRはheadRefNameがローカル同名でも残す", f
   H.assert_eq(out[2].number, 20)
 end)
 
-test("uncovered_prs：取り込み済み(pr-N)は除外する", function()
+test("uncovered_prs：刻印で取り込み済みのPR番号は除外する", function()
   local worktree = load_mod("worktree")
   local list = { { number = 12, headRefName = "feat/x", fork = true } }
 
-  H.assert_eq(#worktree.uncovered_prs(list, { ["pr-12"] = true }), 0)
+  H.assert_eq(#worktree.uncovered_prs(list, {}, { [12] = true }), 0)
+end)
+
+test("uncovered_prs：リネームしてもブランチ名に依存せず番号で除外する", function()
+  local worktree = load_mod("worktree")
+  local list = { { number = 12, headRefName = "feat/x", fork = true } }
+  -- 取り込んだブランチを my-fix にリネーム済み (pr-12 名は存在しない)
+  H.assert_eq(#worktree.uncovered_prs(list, { ["my-fix"] = true }, { [12] = true }), 0)
 end)
 
 test("uncovered_prs：同一リポでもブランチ未到達なら含める", function()

@@ -606,7 +606,8 @@ function M.worktree_selector(window, pane, deps)
   for _, b in ipairs(branch_info.remote_branches) do
     reachable[b.local_name] = true
   end
-  local pr_list = deps.worktree.uncovered_prs(deps.worktree.pull_request_list(git_root), reachable)
+  local pr_list =
+    deps.worktree.uncovered_prs(deps.worktree.pull_request_list(git_root), reachable, deps.worktree.materialized_prs(git_root))
   if #pr_list > 0 then
     table.insert(choices, { id = "_sep_pr", label = "── Pull Requests ──" })
     for _, pr in ipairs(pr_list) do
