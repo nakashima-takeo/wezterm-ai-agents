@@ -22,43 +22,44 @@ local M = {}
 function M.shell_quote(s) return "'" .. s:gsub("'", "'\\''") .. "'" end
 
 -- ============== State cache ==============
--- Per-pane state is cached and only refreshed when the generation counter
--- (bumped by hooks/agent_status.sh) changes.  This eliminates the per-pane
--- file reads that previously ran on every update-status tick.
+-- Per-pane state is cached and only refreshed when the signal file
+-- (written by hooks/agent_status.sh on every state change) changes.
+-- This eliminates the per-pane file reads that previously ran on
+-- every update-status tick.
 
 local state_cache = {}
-local cache_generation = nil
+local last_signal = nil
 local CACHE_NIL = {} -- sentinel: "checked, file absent"
-local last_gen_check = 0
+local last_signal_check = 0
 
 function M.begin_tick(status_dir)
   local now = os.time()
-  if now == last_gen_check then return end
-  last_gen_check = now
+  if now == last_signal_check then return end
+  last_signal_check = now
 
-  local path = status_dir .. "/wezterm-agent-generation"
+  local path = status_dir .. "/wezterm-agent-signal"
   local f = io.open(path, "r")
-  local gen = nil
+  local sig = nil
   if f then
-    gen = f:read("*l")
+    sig = f:read("*l")
     f:close()
   end
-  if gen ~= cache_generation then
+  if sig ~= last_signal then
     state_cache = {}
-    cache_generation = gen
+    last_signal = sig
   end
 end
 
-function M.bump_generation(status_dir)
-  local gen = tostring(os.time()) .. "." .. tostring(math.random(100000))
-  local path = status_dir .. "/wezterm-agent-generation"
+function M.emit_signal(status_dir)
+  local sig = tostring(os.time()) .. "." .. tostring(math.random(100000))
+  local path = status_dir .. "/wezterm-agent-signal"
   local f = io.open(path, "w")
   if f then
-    f:write(gen .. "\n")
+    f:write(sig .. "\n")
     f:close()
   end
-  cache_generation = gen
-  last_gen_check = os.time()
+  last_signal = sig
+  last_signal_check = os.time()
 end
 
 function M.read_state_file(pane_id, status_dir)
@@ -94,7 +95,7 @@ function M.cleanup_stale_files(agent_id, opts)
   if not ok or not entries then return end
   local removed = false
   for _, path in ipairs(entries) do
-    if path:match("/wezterm%-agent%-") and not path:match("%-generation$") then
+    if path:match("/wezterm%-agent%-") and not path:match("%-signal$") then
       local f = io.open(path, "r")
       if f then
         local raw = f:read("*a")
@@ -107,7 +108,7 @@ function M.cleanup_stale_files(agent_id, opts)
       end
     end
   end
-  if removed then M.bump_generation(dir) end
+  if removed then M.emit_signal(dir) end
 end
 
 local registry = {}
@@ -156,7 +157,7 @@ function M.register(impl)
       wf:write(wezterm.json_encode(data) .. "\n")
       wf:close()
       state_cache[tostring(pane_id)] = data
-      M.bump_generation(opts.status_dir)
+      M.emit_signal(opts.status_dir)
       return true
     end
   end
