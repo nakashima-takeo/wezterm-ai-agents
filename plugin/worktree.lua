@@ -155,4 +155,6 @@ function M.delete_branch(git_root, branch) wezterm.run_child_process({ "git", "-
 
 function M.prune(git_root) wezterm.run_child_process({ "git", "-C", git_root, "worktree", "prune" }) end
 
+function M.fetch(git_root) return wezterm.run_child_process({ "git", "-C", git_root, "fetch", "--prune" }) end
+
 return M

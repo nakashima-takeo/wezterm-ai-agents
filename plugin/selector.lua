@@ -498,6 +498,7 @@ function M.worktree_selector(window, pane, deps)
   table.insert(choices, { id = "tmp_create", label = L.tmp_branch_create })
   if has_tmp then table.insert(choices, { id = "cleanup_tmp", label = L.cleanup_tmp }) end
   if has_detached then table.insert(choices, { id = "prune_detached", label = L.prune_detached }) end
+  table.insert(choices, { id = "fetch_remote", label = L.fetch_remote })
 
   table.insert(choices, { id = "_sep_wt", label = "── Worktree ──" })
   for _, wt in ipairs(worktrees) do
@@ -544,6 +545,13 @@ function M.worktree_selector(window, pane, deps)
         end
 
         if id:match("^_sep_") then return end
+
+        if id == "fetch_remote" then
+          local ok = deps.worktree.fetch(git_root)
+          toast(iw, ok and L.fetch_done or L.fetch_failed)
+          M.worktree_selector(iw, ip, deps)
+          return
+        end
 
         if id:match("^auto_create:") then
           local ref, local_name = id:match("^auto_create:(.+):([^:]+)$")
