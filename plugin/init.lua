@@ -224,7 +224,7 @@ function M.apply(config, user_opts)
       prev_win_id = win_id
       if (now - last_status_tick) >= opts.status_update_interval then
         last_status_tick = now
-        ui.set_tab_bar_cols(pane:get_dimensions().cols)
+        ui.set_tab_bar_cols(window:active_tab():get_size().cols)
         local impl, agent_opts = agent.detect(pane, opts)
         if impl and impl.consume_done then pcall(impl.consume_done, pane, agent_opts) end
         local segs = ui.right_status_segments(window, pane, deps)
