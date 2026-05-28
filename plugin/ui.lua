@@ -5,8 +5,6 @@ local wezterm = require("wezterm")
 
 local M = {}
 
-M._tab_bar_cols = 0
-
 -- ============== Path shortening (~/dev/projects/myapp → ~/d/p/myapp) ==============
 
 local function shorten_path(path)
@@ -78,8 +76,12 @@ function M.format_tab_title(tab, deps, max_width, num_tabs)
 
   local effective_max = max_width or theme.max_chars
   local reserve = theme.right_status_reserve or 48
-  if num_tabs and num_tabs > 0 and M._tab_bar_cols > 0 then
-    local per_tab = math.floor((M._tab_bar_cols - reserve) / num_tabs)
+  -- タブバーは右ステータスと同一行を共有するため、ウィンドウ全幅から reserve を引いてタブ幅を割り当てる。
+  -- format-tab-title は max_width に右ステータス分を含めない値を渡してくるため、ここで自前算出する必要がある。
+  local mux_win = tab.window_id and wezterm.mux.get_window(tab.window_id)
+  local tab_bar_cols = mux_win and mux_win:active_tab():get_size().cols or 0
+  if num_tabs and num_tabs > 0 and tab_bar_cols > 0 then
+    local per_tab = math.floor((tab_bar_cols - reserve) / num_tabs)
     effective_max = math.min(effective_max, per_tab)
   end
   local avail = math.max(1, math.min(theme.max_chars, effective_max - 4))
@@ -171,7 +173,5 @@ function M.right_status_segments(window, pane, deps)
   })
   return rs
 end
-
-function M.set_tab_bar_cols(cols) M._tab_bar_cols = cols end
 
 return M
