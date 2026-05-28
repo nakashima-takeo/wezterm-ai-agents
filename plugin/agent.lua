@@ -157,8 +157,8 @@ function M.detect(pane, plugin_opts)
   return nil, nil
 end
 
--- Distinct status dirs to probe: plugin-level + any per-agent override.
--- In the common single-dir setup this is one entry, so a pane is read once.
+-- 探索対象となる重複のない status_dir 一覧: プラグイン共通 + エージェント別オーバーライド。
+-- 単一 dir の一般的な構成ではエントリは 1 つだけなので、ペインは 1 回だけ読まれる。
 local function candidate_dirs(plugin_opts)
   local seen, dirs = {}, {}
   local function add(d)
@@ -176,8 +176,8 @@ local function candidate_dirs(plugin_opts)
   return dirs
 end
 
--- Resolve (impl, state) for one pane in a SINGLE status-file read.
--- Unifies the old detect()+state() double-read shared by count and tab title.
+-- 1 ペインの (impl, state) を状態ファイル 1 回読み取りで解決する。
+-- count とタブタイトルで共有していた旧 detect()+state() の二重読み取りを統合したもの。
 local function resolve_in_dirs(pane_id, dirs)
   for _, dir in ipairs(dirs) do
     local data = M.read_state_file(pane_id, dir)
@@ -189,7 +189,7 @@ local function resolve_in_dirs(pane_id, dirs)
   return nil, nil
 end
 
--- Public single-read resolver, used by tab-title rendering (one pane at a time).
+-- 公開用の 1 回読み取りリゾルバ。タブタイトル描画 (1 ペインずつ) から使う。
 function M.resolve(pane_id, plugin_opts) return resolve_in_dirs(pane_id, candidate_dirs(plugin_opts)) end
 
 -- Aggregate state counts across panes, optionally scoped to a workspace.

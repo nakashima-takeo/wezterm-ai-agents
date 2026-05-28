@@ -1,18 +1,18 @@
--- Performance reproduction harness for the update-status read path.
+-- update-status の読み取り経路を対象としたパフォーマンス再現用ハーネス。
 --
--- Models a WezTerm session as it actually behaves:
---   * GUI windows  -> update-status fires ONCE PER GUI WINDOW per tick.
---                     Typical usage is a single GUI window (gui=1).
---   * MuxWindows   -> mux.all_windows() returns one per workspace, INCLUDING
---                     non-visible (background) workspaces. count() scans all of
---                     them to produce the whole-session "全ワークスペース合計".
---   * tabs / panes -> per workspace.
+-- WezTerm のセッションを実挙動どおりにモデル化する:
+--   * GUI ウィンドウ -> update-status は GUI ウィンドウごとに 1 ティック 1 回発火する。
+--                       一般的な使い方は GUI ウィンドウ 1 枚 (gui=1)。
+--   * MuxWindow      -> mux.all_windows() はワークスペースごとに 1 つ返し、非表示
+--                       (バックグラウンド) のワークスペースも含む。count() はそれら
+--                       すべてを走査してセッション全体の「全ワークスペース合計」を作る。
+--   * タブ / ペイン  -> ワークスペースごと。
 --
--- It writes a real per-pane status file for each pane and counts how many
--- status-file reads + how much wall-clock a tick costs through the real path:
--- ui.right_status_segments -> agent.count -> classify_pane -> read_state_file.
+-- 各ペインに実際のペイン別状態ファイルを書き込み、実際の経路:
+-- ui.right_status_segments -> agent.count -> classify_pane -> read_state_file
+-- を通して、1 ティックあたりの状態ファイル読み取り回数と所要時間を計測する。
 --
--- Run: luajit test/bench_status.lua [workspaces] [tabs] [panes_per_tab] [gui_windows]
+-- 実行: luajit test/bench_status.lua [workspaces] [tabs] [panes_per_tab] [gui_windows]
 
 package.path = package.path .. ";test/?.lua"
 local mock = require("mock_wezterm")
@@ -22,7 +22,7 @@ _G.wezterm = mock
 local PLUGIN_DIR = io.popen("pwd"):read("*l")
 local function load_mod(rel) return dofile(PLUGIN_DIR .. "/plugin/" .. rel .. ".lua") end
 
--- ===== load plugin modules and register all 4 agents =====
+-- ===== プラグインモジュールを読み込み、4 つのエージェントを全て登録 =====
 local agent = load_mod("agent")
 for _, id in ipairs({ "claude", "codex", "cursor", "gemini" }) do
   agent.register(load_mod("agents/" .. id))
@@ -30,9 +30,9 @@ end
 local ui = load_mod("ui")
 local icons = load_mod("icons")
 
--- ===== count status-file reads by wrapping read_state_file (a spy) =====
--- The hot path (right_status_segments -> count) reads only via this, so wrapping
--- it measures exactly the reads we care about, without touching global io.open.
+-- ===== read_state_file をラップ (スパイ) して状態ファイル読み取り回数を数える =====
+-- ホットパス (right_status_segments -> count) はこの関数経由でしか読まないため、
+-- ここをラップすればグローバルな io.open に触れずに目的の読み取りだけを正確に計測できる。
 local read_count = 0
 local real_read = agent.read_state_file
 agent.read_state_file = function(pane_id, dir)
@@ -40,14 +40,14 @@ agent.read_state_file = function(pane_id, dir)
   return real_read(pane_id, dir)
 end
 
--- ===== params =====
-local WS = tonumber(arg[1]) or 3 -- workspaces (== MuxWindows returned by mux)
-local T = tonumber(arg[2]) or 5 -- tabs per workspace
-local P = tonumber(arg[3]) or 3 -- panes per tab
-local GUI = tonumber(arg[4]) or 1 -- GUI windows (== update-status firings per tick)
-local TICKS = 60 -- simulate 60 ticks (~1 minute at 1Hz)
+-- ===== パラメータ =====
+local WS = tonumber(arg[1]) or 3 -- ワークスペース数 (== mux が返す MuxWindow 数)
+local T = tonumber(arg[2]) or 5 -- ワークスペースあたりのタブ数
+local P = tonumber(arg[3]) or 3 -- タブあたりのペイン数
+local GUI = tonumber(arg[4]) or 1 -- GUI ウィンドウ数 (== 1 ティックあたりの update-status 発火回数)
+local TICKS = 60 -- 60 ティック (1Hz でおよそ 1 分) をシミュレート
 
--- ===== temp status dir + per-pane state files =====
+-- ===== 一時 status_dir + ペイン別状態ファイル =====
 local status_dir = os.tmpname()
 os.remove(status_dir)
 os.execute("mkdir -p " .. status_dir)
@@ -57,7 +57,7 @@ local pane_seq = 0
 local function make_pane()
   pane_seq = pane_seq + 1
   local id = pane_seq
-  -- ~80% of panes are real claude agents, rest have no state file (non-agent).
+  -- ペインの約 80% は実際の claude エージェント、残りは状態ファイルなし (非エージェント)。
   if id % 5 ~= 0 then
     local st = STATES[(id % #STATES) + 1]
     local json = string.format('{"agent":"claude","state":"%s","ts":%d,"session_id":"sess-%d"}', st, 1700000000 + id, id)
@@ -71,7 +71,7 @@ local function make_pane()
   }
 end
 
--- ===== build mock mux: one MuxWindow per workspace =====
+-- ===== モック mux を構築: ワークスペースごとに MuxWindow 1 つ =====
 local mux_windows = {}
 for w = 1, WS do
   local tabs = {}
@@ -93,7 +93,6 @@ for w = 1, WS do
 end
 mock.mux.all_windows = function() return mux_windows end
 
--- ===== GUI window object passed to right_status_segments =====
 local function make_gui_window(wid)
   return {
     window_id = function() return wid end,
@@ -101,7 +100,7 @@ local function make_gui_window(wid)
   }
 end
 
--- ===== minimal opts/deps (mirror init.lua defaults needed by ui) =====
+-- ===== 最小限の opts/deps (ui が必要とする init.lua のデフォルトを再現) =====
 local opts = {
   status_dir = status_dir,
   ui = {
@@ -113,13 +112,13 @@ local opts = {
     },
   },
 }
--- inject icons into each agent impl (init.lua normally does this)
+-- 各エージェント impl にアイコンを注入 (通常は init.lua が行う)
 for _, impl in ipairs(agent.all()) do
   impl.icons = icons.unicode
 end
 local deps = { opts = opts, agent = agent, selector = { pinned_windows = {} } }
 
--- ===== measure: each tick, update-status fires once per GUI window =====
+-- ===== 計測: 各ティックで update-status は GUI ウィンドウごとに 1 回発火する =====
 local total_panes = WS * T * P
 local a_pane = mux_windows[1]:tabs()[1]:panes()[1]
 read_count = 0
