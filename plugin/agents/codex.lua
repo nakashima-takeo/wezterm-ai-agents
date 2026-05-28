@@ -19,8 +19,8 @@ M.colors = {
 function M.spawn_args(opts, session_id, cwd)
   local cmd = opts.command
   if session_id then cmd = cmd .. " resume" end
-  if cwd then cmd = cmd .. " --cd " .. M.shell_quote(cwd) end
-  if session_id then cmd = cmd .. " " .. M.shell_quote(session_id) end
+  if cwd then cmd = cmd .. " --cd " .. opts.shell_quote(cwd) end
+  if session_id then cmd = cmd .. " " .. opts.shell_quote(session_id) end
   local shell = opts.shell
   return { shell, "-lc", string.format("%s; exec %s -l", cmd, shell) }
 end
