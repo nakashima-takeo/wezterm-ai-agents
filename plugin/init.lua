@@ -206,7 +206,7 @@ function M.apply(config, user_opts)
   if opts.install_ui_tab_title then
     wezterm.on(
       "format-tab-title",
-      function(tab, _tabs, _panes, _config, _hover, max_width) return ui.format_tab_title(tab, deps, max_width) end
+      function(tab, tabs, _panes, _config, _hover, max_width) return ui.format_tab_title(tab, deps, max_width, #tabs) end
     )
   end
 
@@ -224,6 +224,7 @@ function M.apply(config, user_opts)
       prev_win_id = win_id
       if (now - last_status_tick) >= opts.status_update_interval then
         last_status_tick = now
+        ui.set_tab_bar_cols(pane:get_dimensions().cols)
         local impl, agent_opts = agent.detect(pane, opts)
         if impl and impl.consume_done then pcall(impl.consume_done, pane, agent_opts) end
         local segs = ui.right_status_segments(window, pane, deps)

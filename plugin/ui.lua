@@ -5,6 +5,8 @@ local wezterm = require("wezterm")
 
 local M = {}
 
+M._tab_bar_cols = 0
+
 -- ============== Path shortening (~/dev/projects/myapp → ~/d/p/myapp) ==============
 
 local function shorten_path(path)
@@ -32,6 +34,23 @@ end
 M.shorten_path = shorten_path
 M.pane_cwd_str = pane_cwd_str
 
+local function display_cols(s)
+  local n = 0
+  for i = 1, #s do
+    local b = s:byte(i)
+    if b < 0x80 or b >= 0xC0 then n = n + 1 end
+  end
+  return n
+end
+
+-- Keep the rightmost portion of the path and left-pad to a fixed column width.
+local function fixed_width(s, w)
+  s = wezterm.truncate_left(s, w)
+  local cols = display_cols(s)
+  if cols < w then s = string.rep(" ", w - cols) .. s end
+  return s
+end
+
 -- ============== Tab title ==============
 
 local function pane_agent_info(pane_id, deps)
@@ -50,13 +69,20 @@ M.pane_agent_icon = function(pane_id, deps)
   return icon
 end
 
-function M.format_tab_title(tab, deps, max_width)
+function M.format_tab_title(tab, deps, max_width, num_tabs)
   local theme = deps.opts.ui.tab_title
   local icon, icon_color, st = pane_agent_info(tab.active_pane.pane_id, deps)
   if st == "idle" then icon = nil end
   icon = icon or ""
   local full = tab.active_pane.title or ""
-  local avail = math.max(1, math.min(theme.max_chars, (max_width or theme.max_chars) - 4))
+
+  local effective_max = max_width or theme.max_chars
+  local reserve = theme.right_status_reserve or 48
+  if num_tabs and num_tabs > 0 and M._tab_bar_cols > 0 then
+    local per_tab = math.floor((M._tab_bar_cols - reserve) / num_tabs)
+    effective_max = math.min(effective_max, per_tab)
+  end
+  local avail = math.max(1, math.min(theme.max_chars, effective_max - 4))
   if icon ~= "" then avail = avail - 2 end
   local title = wezterm.truncate_right(full, avail)
   if title ~= full then title = title .. "…" end
@@ -140,8 +166,12 @@ function M.right_status_segments(window, pane, deps)
   end
 
   table.insert(rs, { Foreground = { Color = theme.fg } })
-  table.insert(rs, { Text = "  " .. pane_cwd_str(pane) .. "  |  " .. window:active_workspace() .. "  " })
+  table.insert(rs, {
+    Text = "  " .. fixed_width(pane_cwd_str(pane), theme.cwd_width or 20) .. "  |  " .. window:active_workspace() .. "  ",
+  })
   return rs
 end
+
+function M.set_tab_bar_cols(cols) M._tab_bar_cols = cols end
 
 return M
