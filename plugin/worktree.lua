@@ -155,4 +155,145 @@ function M.delete_branch(git_root, branch) wezterm.run_child_process({ "git", "-
 
 function M.prune(git_root) wezterm.run_child_process({ "git", "-C", git_root, "worktree", "prune" }) end
 
+function M.fetch(git_root) return wezterm.run_child_process({ "git", "-C", git_root, "fetch", "--prune" }) end
+
+-- POSIX シングルクォートエスケープ (gh を cwd 指定で動かすため sh -lc に渡す)
+local function shq(s) return "'" .. s:gsub("'", "'\\''") .. "'" end
+
+local function pr_cache_file(git_root)
+  local dir = (os.getenv("TMPDIR") or "/tmp"):gsub("/$", "")
+  return dir .. "/wezterm-pr-" .. git_root:gsub("[^%w]", "_") .. ".json"
+end
+
+local GH_PR_LIST = "gh pr list --json number,headRefName,state,isCrossRepository,headRepositoryOwner --limit 200"
+
+-- ワークスペース切替時に呼ぶ。git fetch と gh pr list を裏で並列実行 (UI 非ブロッキング)。
+-- gh の結果はキャッシュファイルへ書き出し、worktree 画面はそれを読むだけにする。
+function M.prefetch(git_root)
+  wezterm.background_child_process({ "git", "-C", git_root, "fetch", "--prune" })
+  local cache = pr_cache_file(git_root)
+  local tmp = shq(cache .. ".tmp")
+  local cmd = ("cd %s && %s > %s 2>/dev/null && mv %s %s"):format(shq(git_root), GH_PR_LIST, tmp, tmp, shq(cache))
+  wezterm.background_child_process({ "/bin/sh", "-lc", cmd })
+end
+
+-- 手動 fetch 用。gh を同期実行してキャッシュを即時更新する。
+function M.refresh_pr_cache(git_root)
+  local ok, stdout = wezterm.run_child_process({ "/bin/sh", "-lc", "cd " .. shq(git_root) .. " && " .. GH_PR_LIST .. " 2>/dev/null" })
+  if ok and stdout and stdout ~= "" then
+    local f = io.open(pr_cache_file(git_root), "w")
+    if f then
+      f:write(stdout)
+      f:close()
+    end
+  end
+end
+
+-- 生 JSON を正規化した配列 [{ number, headRefName, state, fork, owner }] に変換する純関数。
+function M.parse_pr_list(raw)
+  if not raw or raw == "" then return {} end
+  local ok, data = pcall(wezterm.json_parse, raw)
+  if not ok or type(data) ~= "table" then return {} end
+  local list = {}
+  for _, pr in ipairs(data) do
+    if pr.number and pr.headRefName then
+      table.insert(list, {
+        number = pr.number,
+        headRefName = pr.headRefName,
+        state = pr.state,
+        fork = pr.isCrossRepository == true,
+        owner = type(pr.headRepositoryOwner) == "table" and pr.headRepositoryOwner.login or nil,
+      })
+    end
+  end
+  return list
+end
+
+local function read_pr_cache(git_root)
+  local f = io.open(pr_cache_file(git_root), "r")
+  if not f then return "" end
+  local raw = f:read("*a")
+  f:close()
+  return raw or ""
+end
+
+-- キャッシュから open PR の配列を返す。
+function M.pull_request_list(git_root) return M.parse_pr_list(read_pr_cache(git_root)) end
+
+-- git config の branch.<name>.merge=refs/pull/<N>/head 刻印を { [branch] = number } で返す。
+-- gh pr checkout / add_pr_worktree が刻んだ印を読み、ブランチ名に依存せず PR を逆引きする。
+function M.pr_branch_config(git_root)
+  local out = {}
+  local ok, stdout = wezterm.run_child_process({ "git", "-C", git_root, "config", "--get-regexp", "^branch\\..*\\.merge$" })
+  if not ok or not stdout then return out end
+  for line in stdout:gmatch("[^\n]+") do
+    local key, val = line:match("^(%S+)%s+(.+)$")
+    local number = val and val:match("^refs/pull/(%d+)/head$")
+    local branch = key and key:match("^branch%.(.+)%.merge$")
+    if number and branch then out[branch] = tonumber(number) end
+  end
+  return out
+end
+
+-- 刻印から「ローカルに取り込み済みの PR 番号」の集合 { [number] = true } を返す。
+function M.materialized_prs(git_root)
+  local out = {}
+  for _, number in pairs(M.pr_branch_config(git_root)) do
+    out[number] = true
+  end
+  return out
+end
+
+-- { [branch] = { number, state } } のマップを返す。バッジ/番号引き用。
+-- 主軸は git config 刻印 (branch.<name>.merge) による PR 番号逆引き (ブランチ名非依存)。
+-- 同一リポ PR はブランチが PR の head そのものなので headRefName でも引ける。
+function M.pull_requests(git_root)
+  local map = {}
+  local by_number = {}
+  for _, pr in ipairs(M.pull_request_list(git_root)) do
+    local rec = { number = pr.number, state = pr.state }
+    by_number[pr.number] = rec
+    map[pr.headRefName] = rec
+  end
+  for branch, number in pairs(M.pr_branch_config(git_root)) do
+    if by_number[number] then map[branch] = by_number[number] end
+  end
+  return map
+end
+
+-- ブランチとして到達できない PR (主に fork) だけを返す純関数。
+-- reachable: 既に画面に出ているブランチ名の集合 (worktree/local/remote)。
+-- materialized: 刻印で取り込み済みの PR 番号集合 { [number] = true } (ブランチ名非依存)。
+function M.uncovered_prs(pr_list, reachable, materialized)
+  materialized = materialized or {}
+  local out = {}
+  for _, pr in ipairs(pr_list) do
+    local taken = materialized[pr.number] -- 刻印で取り込み済み
+    local shown_as_branch = not pr.fork and reachable[pr.headRefName] -- 同一リポPRで既出
+    if not taken and not shown_as_branch then table.insert(out, pr) end
+  end
+  return out
+end
+
+-- PR の head を pr-<N> ローカルブランチとして取り寄せ、worktree を作る。
+-- gh pr checkout と同じく branch.<name>.merge=refs/pull/N/head を刻み、ブランチ名に依存せず PR を逆引きできるようにする。
+function M.add_pr_worktree(git_root, number, opts)
+  local branch = "pr-" .. tostring(number)
+  local refspec = ("pull/%d/head:%s"):format(number, branch)
+  local ok, _, stderr = wezterm.run_child_process({ "git", "-C", git_root, "fetch", "origin", refspec })
+  if not ok then return false, nil, stderr end
+  wezterm.run_child_process({ "git", "-C", git_root, "config", ("branch.%s.remote"):format(branch), "origin" })
+  wezterm.run_child_process({ "git", "-C", git_root, "config", ("branch.%s.merge"):format(branch), ("refs/pull/%d/head"):format(number) })
+  local template = (opts and opts.worktree and opts.worktree.path) or "sibling"
+  local wt_path = M.resolve_path(template, git_root, branch)
+  local ok2, _, stderr2 = wezterm.run_child_process({ "git", "-C", git_root, "worktree", "add", wt_path, branch })
+  return ok2, wt_path, stderr2
+end
+
+-- PR をブラウザで開く (fire-and-forget)。
+function M.open_pr_web(git_root, number)
+  local cmd = ("cd %s && gh pr view --web %d"):format(shq(git_root), number)
+  wezterm.background_child_process({ "/bin/sh", "-lc", cmd })
+end
+
 return M

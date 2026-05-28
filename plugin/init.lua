@@ -49,7 +49,7 @@ local function load_modules(plugin_dir, enabled_agents)
 end
 
 local M = {
-  version = "0.5.2",
+  version = "0.6.0",
   workspace = nil,
   worktree = nil,
   layout = nil,
@@ -216,6 +216,7 @@ function M.apply(config, user_opts)
     local prev_win_id = nil
     wezterm.on("update-status", function(window, pane)
       local now = os.time()
+      pcall(selector.maybe_prefetch, window, pane, deps)
       local win_id = tostring(window:window_id())
       if prev_win_id and prev_win_id ~= win_id and selector.pinned_windows[prev_win_id] then
         selector.pinned_windows[prev_win_id] = nil
