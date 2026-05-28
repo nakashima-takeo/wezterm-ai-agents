@@ -149,14 +149,13 @@ function M.register(impl)
       local data = M.read_state_file(pane_id, opts.status_dir)
       if not data then return false end
       if data.state ~= "done" or data.agent ~= agent_id then return false end
-      data.state = fallback
-      data.ts = os.time()
+      local updated = { state = fallback, ts = os.time(), agent = data.agent, session_id = data.session_id }
       local path = opts.status_dir .. "/wezterm-agent-" .. pane_id
       local wf = io.open(path, "w")
       if not wf then return false end
-      wf:write(wezterm.json_encode(data) .. "\n")
+      wf:write(wezterm.json_encode(updated) .. "\n")
       wf:close()
-      state_cache[tostring(pane_id)] = data
+      state_cache[tostring(pane_id)] = updated
       M.emit_signal(opts.status_dir)
       return true
     end
