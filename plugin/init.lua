@@ -104,7 +104,6 @@ local default_opts = {
   modifier_prefix = wezterm.target_triple:find("darwin") and "CMD" or "CTRL",
   locale = (os.getenv("LANG") or ""):sub(1, 2) == "ja" and "ja" or "en",
 
-  status_update_interval = 1, -- right-status refresh (sec)
   session_sync_interval = 5, -- workspace full snapshot sync (sec)
 
   right_status_extra = nil, -- function(window, pane, deps) -> segments
