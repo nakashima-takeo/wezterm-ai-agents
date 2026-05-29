@@ -177,7 +177,6 @@ local function candidate_dirs(plugin_opts)
 end
 
 -- 1 ペインの (impl, state) を状態ファイル 1 回読み取りで解決する。
--- count とタブタイトルで共有していた旧 detect()+state() の二重読み取りを統合したもの。
 local function resolve_in_dirs(pane_id, dirs)
   for _, dir in ipairs(dirs) do
     local data = M.read_state_file(pane_id, dir)
