@@ -230,13 +230,21 @@ ai.apply(config, {
   right_status_extra = nil,         -- function(window, pane, deps) -> segments
   install_ui_tab_title = true,
   install_ui_status = true,
-  install_tab_bar_style = true,     -- tab-bar tweaks for plugin UI (fancy / hide buttons / always show / width follows max_chars)
-  install_appearance = true,        -- appearance defaults (Catppuccin Mocha / opacity / blur / tab-bar colors). Only fills unset fields, so config.color_scheme etc. override it. Font is excluded
   install_keybinds = true,
 })
 ```
 
 See `default_opts` in `plugin/init.lua` for all options.
+
+### Appearance defaults
+
+Appearance and tab-bar settings (Catppuccin Mocha / opacity / blur / fancy tab bar, etc.) are **always applied, non-destructively**. If you set `config.X` yourself it takes precedence, so you can override defaults whether you write them before or after `apply()` (font is excluded).
+
+```lua
+config.color_scheme = "Tokyo Night"        -- use a different scheme
+config.window_background_opacity = 1.0     -- disable transparency
+config.use_fancy_tab_bar = false           -- back to the retro tab bar
+```
 
 ## Adding a New Agent
 

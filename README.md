@@ -230,13 +230,21 @@ ai.apply(config, {
   right_status_extra = nil,         -- function(window, pane, deps) -> segments
   install_ui_tab_title = true,
   install_ui_status = true,
-  install_tab_bar_style = true,     -- タブUI向けタブバー設定 (fancy / ボタン非表示 / 1タブ時も表示 / 幅を max_chars に連動)
-  install_appearance = true,        -- 見た目のデフォルト (Catppuccin Mocha / 透過 / ブラー / タブバー色)。未設定の項目だけ補うので config.color_scheme 等で上書き可。フォントは対象外
   install_keybinds = true,
 })
 ```
 
 全オプションは `plugin/init.lua` の `default_opts` を参照。
+
+### 見た目のデフォルト
+
+見た目とタブバー設定 (Catppuccin Mocha / 透過 / ブラー / fancy タブバー等) は**常時・非破壊で適用**される。利用者が `config.X` を設定していればそちらが優先されるので、好みは `apply()` の前後どちらに書いても上書きできる (フォントは対象外)。
+
+```lua
+config.color_scheme = "Tokyo Night"        -- 別の配色に置換
+config.window_background_opacity = 1.0     -- 透過を無効化
+config.use_fancy_tab_bar = false           -- 標準のタブバーに戻す
+```
 
 ## エージェントの追加
 
