@@ -231,6 +231,7 @@ ai.apply(config, {
   install_ui_tab_title = true,
   install_ui_status = true,
   install_tab_bar_style = true,     -- tab-bar tweaks for plugin UI (fancy / hide buttons / always show / width follows max_chars)
+  install_appearance = true,        -- appearance defaults (Catppuccin Mocha / opacity / blur / tab-bar colors). Only fills unset fields, so config.color_scheme etc. override it. Font is excluded
   install_keybinds = true,
 })
 ```

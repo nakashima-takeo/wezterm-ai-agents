@@ -59,6 +59,46 @@ test("正常系：tab_max_width が max_chars に連動する", function()
   H.assert_eq(config.tab_max_width, 48)
 end)
 
+test("正常系：install_appearance が未設定の見た目デフォルトを補う", function()
+  wezterm._events = {}
+  local init = load_mod("init")
+  local config = wezterm.config_builder()
+
+  init.apply(config, { plugin_dir = H.plugin_dir })
+
+  H.assert_eq(config.color_scheme, "Catppuccin Mocha")
+  H.assert_eq(config.window_background_opacity, 0.92)
+  H.assert_eq(config.macos_window_background_blur, 18)
+  H.assert_eq(config.window_decorations, "RESIZE")
+  H.assert_eq(config.colors.tab_bar.background, "#11111b")
+end)
+
+test("正常系：install_appearance は利用者の明示設定を潰さない (非破壊)", function()
+  wezterm._events = {}
+  local init = load_mod("init")
+  local config = wezterm.config_builder()
+
+  config.color_scheme = "Tokyo Night"
+  config.window_background_opacity = 1.0
+
+  init.apply(config, { plugin_dir = H.plugin_dir })
+
+  H.assert_eq(config.color_scheme, "Tokyo Night")
+  H.assert_eq(config.window_background_opacity, 1.0)
+  H.assert_eq(config.window_decorations, "RESIZE") -- 未設定の項目は補われる
+end)
+
+test("正常系：install_appearance=false で見た目を一切触らない", function()
+  wezterm._events = {}
+  local init = load_mod("init")
+  local config = wezterm.config_builder()
+
+  init.apply(config, { plugin_dir = H.plugin_dir, install_appearance = false })
+
+  H.assert_eq(config.color_scheme, nil)
+  H.assert_eq(config.colors, nil)
+end)
+
 test("正常系：install_tab_bar_style=false でタブバースタイルを設定しない", function()
   wezterm._events = {}
   local init = load_mod("init")

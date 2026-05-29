@@ -231,6 +231,7 @@ ai.apply(config, {
   install_ui_tab_title = true,
   install_ui_status = true,
   install_tab_bar_style = true,     -- タブUI向けタブバー設定 (fancy / ボタン非表示 / 1タブ時も表示 / 幅を max_chars に連動)
+  install_appearance = true,        -- 見た目のデフォルト (Catppuccin Mocha / 透過 / ブラー / タブバー色)。未設定の項目だけ補うので config.color_scheme 等で上書き可。フォントは対象外
   install_keybinds = true,
 })
 ```

@@ -99,6 +99,10 @@ local default_opts = {
   install_ui_tab_title = true,
   install_ui_status = true,
   install_tab_bar_style = true, -- fancy tab bar + ボタン非表示 (プラグインのタブUI向け)
+  -- 見た目のデフォルト (Catppuccin Mocha 基調・透過・ブラー)。非破壊適用なので、
+  -- apply の前後どちらで config.color_scheme 等を書いても利用者の設定が常に優先される。
+  -- フォントは環境依存のため対象外 (WezTerm 同梱の JetBrains Mono に任せる)。
+  install_appearance = true,
   install_keybinds = true,
   disabled_keybinds = {},
   keybinds = {},
@@ -204,6 +208,25 @@ function M.apply(config, user_opts)
     opts = opts,
   }
   M.deps = deps
+
+  if opts.install_appearance then
+    local tt = opts.ui.tab_title
+    -- config.X = config.X or default: 未設定のときだけ入れる (利用者の明示設定を潰さない / 順序非依存)
+    config.color_scheme = config.color_scheme or "Catppuccin Mocha"
+    config.window_background_opacity = config.window_background_opacity or 0.92
+    if config.macos_window_background_blur == nil and wezterm.target_triple:find("darwin") then config.macos_window_background_blur = 18 end
+    config.window_decorations = config.window_decorations or "RESIZE"
+    config.window_padding = config.window_padding or { left = 10, right = 10, top = 10, bottom = 6 }
+    config.window_frame = config.window_frame or { active_titlebar_bg = tt.inactive_bg, inactive_titlebar_bg = tt.inactive_bg }
+    config.colors = config.colors or {}
+    config.colors.tab_bar = config.colors.tab_bar
+      or {
+        background = tt.inactive_bg,
+        active_tab = { bg_color = tt.active_bg, fg_color = tt.active_fg },
+        inactive_tab = { bg_color = tt.inactive_bg, fg_color = tt.inactive_fg },
+        inactive_tab_hover = { bg_color = tt.active_bg, fg_color = opts.ui.right_status.fg },
+      }
+  end
 
   if opts.install_tab_bar_style then
     config.use_fancy_tab_bar = true
