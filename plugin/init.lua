@@ -49,7 +49,7 @@ local function load_modules(plugin_dir, enabled_agents)
 end
 
 local M = {
-  version = "0.6.1",
+  version = "0.7.0",
   workspace = nil,
   worktree = nil,
   layout = nil,
@@ -98,6 +98,7 @@ local default_opts = {
 
   install_ui_tab_title = true,
   install_ui_status = true,
+  install_tab_bar_style = true, -- fancy tab bar + ボタン非表示 (プラグインのタブUI向け)
   install_keybinds = true,
   disabled_keybinds = {},
   keybinds = {},
@@ -202,6 +203,15 @@ function M.apply(config, user_opts)
     opts = opts,
   }
   M.deps = deps
+
+  if opts.install_tab_bar_style then
+    config.use_fancy_tab_bar = true
+    config.show_close_tab_button_in_tabs = false
+    config.show_new_tab_button_in_tab_bar = false
+    config.hide_tab_bar_if_only_one_tab = false -- 1タブ時もエージェント状態UIを表示
+    -- WezTerm の tab_max_width (既定16) がタブタイトル幅の上限になるため、max_chars に余裕分を足して連動させる。
+    config.tab_max_width = opts.ui.tab_title.max_chars + 8
+  end
 
   if opts.install_ui_tab_title then
     wezterm.on(
