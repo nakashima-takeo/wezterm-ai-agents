@@ -158,6 +158,7 @@ function M.apply(config, user_opts)
   end
 
   local icon_set = opts.nerd_font and builtin_icons.nerd or builtin_icons.unicode
+  opts.icons = icon_set
   for _, impl in ipairs(agent.all()) do
     impl.icons = icon_set
   end

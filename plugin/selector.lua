@@ -108,6 +108,23 @@ local function shorten_path(path)
   return path
 end
 
+-- List immediate subdirectories (incl. hidden) of `dir`, sorted, names only.
+local function list_subdirs(dir)
+  local ok, stdout = wezterm.run_child_process({ "ls", "-1Ap", "--", dir })
+  if not ok or not stdout then return {} end
+  local dirs = {}
+  for line in stdout:gmatch("[^\n]+") do
+    if line:sub(-1) == "/" then table.insert(dirs, line:sub(1, -2)) end
+  end
+  return dirs
+end
+
+local function parent_dir(dir)
+  local parent = dir:gsub("/+$", ""):gsub("/[^/]*$", "")
+  if parent == "" then return "/" end
+  return parent
+end
+
 M.append_agents_colored = append_agents_colored
 M.append_ws_status = append_ws_status
 M.build_ws_header = build_ws_header
@@ -201,6 +218,41 @@ end
 
 -- ============== Workspace register (Cmd+Shift+N) ==============
 
+-- InputSelector-based directory navigator. Fuzzy-filter subdirs, drill in/out,
+-- and confirm. Calls on_select(dir) on confirmation. WezTerm has no native path
+-- completion, so this is the substitute.
+local function pick_directory(window, pane, dir, L, folder_icon, on_select)
+  local choices = {}
+  table.insert(choices, { id = "_select", label = string.format(L.dir_select_here, shorten_path(dir)) })
+  if dir ~= "/" then table.insert(choices, { id = "_up", label = L.dir_go_up }) end
+  for _, name in ipairs(list_subdirs(dir)) do
+    table.insert(choices, { id = "dir:" .. name, label = folder_icon .. " " .. name })
+  end
+
+  window:perform_action(
+    act.InputSelector({
+      title = string.format(L.dir_picker_title, shorten_path(dir)),
+      choices = choices,
+      fuzzy = true,
+      action = wezterm.action_callback(function(iw, ip, id)
+        if not id then return end
+        if id == "_select" then
+          on_select(dir)
+        elseif id == "_up" then
+          pick_directory(iw, ip, parent_dir(dir), L, folder_icon, on_select)
+        else
+          local name = id:match("^dir:(.+)$")
+          if name then
+            local next_dir = (dir == "/" and "/" or dir .. "/") .. name
+            pick_directory(iw, ip, next_dir, L, folder_icon, on_select)
+          end
+        end
+      end),
+    }),
+    pane
+  )
+end
+
 function M.workspace_register(window, pane, deps)
   local opts = deps.opts
   local L = opts.labels
@@ -210,38 +262,33 @@ function M.workspace_register(window, pane, deps)
     return
   end
 
-  local default_name = cwd_path:gsub("/$", ""):match("([^/]+)$") or ""
+  local folder_icon = (opts.icons and opts.icons.folder) or "📁"
 
-  window:perform_action(
-    act.PromptInputLine({
-      description = string.format(L.enter_ws_name, default_name),
-      action = wezterm.action_callback(function(iw, ip, name)
-        if name == nil then return end
-        if name == "" then name = default_name end
-        iw:perform_action(
-          act.PromptInputLine({
-            description = L.enter_cwd,
-            initial_value = cwd_path,
-            action = wezterm.action_callback(function(cw, _cp, cwd)
-              if not cwd or cwd == "" then return end
-              cwd = cwd:gsub("/$", "")
-              local data = deps.workspace.read(opts.workspace)
-              local ws, idx = deps.workspace.find(data, name)
-              if ws then
-                data.workspaces[idx] = { name = name, cwd = cwd, tabs = ws.tabs }
-              else
-                table.insert(data.workspaces, { name = name, cwd = cwd, lastUsed = os.time() })
-              end
-              deps.workspace.write(opts.workspace, data)
-              toast(cw, string.format(L.ws_registered, name, cwd))
-            end),
-          }),
-          ip
-        )
-      end),
-    }),
-    pane
-  )
+  -- Pick the directory first, then suggest a workspace name from its basename.
+  pick_directory(window, pane, cwd_path:gsub("/+$", ""):gsub("^$", "/"), L, folder_icon, function(cwd)
+    cwd = cwd:gsub("/+$", ""):gsub("^$", "/")
+    local default_name = cwd:match("([^/]+)$") or ""
+    window:perform_action(
+      act.PromptInputLine({
+        description = L.enter_ws_name,
+        initial_value = default_name,
+        action = wezterm.action_callback(function(iw, _ip, name)
+          if name == nil then return end
+          if name == "" then name = default_name end
+          local data = deps.workspace.read(opts.workspace)
+          local ws, idx = deps.workspace.find(data, name)
+          if ws then
+            data.workspaces[idx] = { name = name, cwd = cwd, tabs = ws.tabs }
+          else
+            table.insert(data.workspaces, { name = name, cwd = cwd, lastUsed = os.time() })
+          end
+          deps.workspace.write(opts.workspace, data)
+          toast(iw, string.format(L.ws_registered, name, cwd))
+        end),
+      }),
+      pane
+    )
+  end)
 end
 
 -- ============== Workspace delete ==============
