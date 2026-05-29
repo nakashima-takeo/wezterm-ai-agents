@@ -157,18 +157,50 @@ function M.detect(pane, plugin_opts)
   return nil, nil
 end
 
+-- 探索対象となる重複のない status_dir 一覧: プラグイン共通 + エージェント別オーバーライド。
+-- 単一 dir の一般的な構成ではエントリは 1 つだけなので、ペインは 1 回だけ読まれる。
+local function candidate_dirs(plugin_opts)
+  local seen, dirs = {}, {}
+  local function add(d)
+    if d and not seen[d] then
+      seen[d] = true
+      dirs[#dirs + 1] = d
+    end
+  end
+  add(plugin_opts.status_dir)
+  if plugin_opts.agents then
+    for _, a in pairs(plugin_opts.agents) do
+      if type(a) == "table" then add(a.status_dir) end
+    end
+  end
+  return dirs
+end
+
+-- 1 ペインの (impl, state) を状態ファイル 1 回読み取りで解決する。
+local function resolve_in_dirs(pane_id, dirs)
+  for _, dir in ipairs(dirs) do
+    local data = M.read_state_file(pane_id, dir)
+    if data and data.agent then
+      local impl = registry[data.agent]
+      if impl then return impl, data.state or impl.default_state or "idle" end
+    end
+  end
+  return nil, nil
+end
+
+-- 公開用の 1 回読み取りリゾルバ。タブタイトル描画 (1 ペインずつ) から使う。
+function M.resolve(pane_id, plugin_opts) return resolve_in_dirs(pane_id, candidate_dirs(plugin_opts)) end
+
 -- Aggregate state counts across panes, optionally scoped to a workspace.
 function M.count(plugin_opts, ws_name)
   local counts = { working = 0, waiting = 0, done = 0, idle = 0, error = 0, unknown = 0 }
+  local dirs = candidate_dirs(plugin_opts)
   for _, win in ipairs(mux.all_windows()) do
     if not ws_name or win:get_workspace() == ws_name then
       for _, tab in ipairs(win:tabs()) do
         for _, p in ipairs(tab:panes()) do
-          local impl, agent_opts = M.detect(p, plugin_opts)
-          if impl then
-            local st = impl.state(p, agent_opts)
-            if counts[st] then counts[st] = counts[st] + 1 end
-          end
+          local _, st = resolve_in_dirs(p:pane_id(), dirs)
+          if st and counts[st] then counts[st] = counts[st] + 1 end
         end
       end
     end
