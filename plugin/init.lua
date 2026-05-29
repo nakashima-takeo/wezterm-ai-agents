@@ -208,6 +208,9 @@ function M.apply(config, user_opts)
     config.use_fancy_tab_bar = true
     config.show_close_tab_button_in_tabs = false
     config.show_new_tab_button_in_tab_bar = false
+    config.hide_tab_bar_if_only_one_tab = false -- 1タブ時もエージェント状態UIを表示
+    -- WezTerm の tab_max_width (既定16) がタブタイトル幅の上限になるため、max_chars に余裕分を足して連動させる。
+    config.tab_max_width = opts.ui.tab_title.max_chars + 8
   end
 
   if opts.install_ui_tab_title then

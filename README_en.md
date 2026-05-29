@@ -230,7 +230,7 @@ ai.apply(config, {
   right_status_extra = nil,         -- function(window, pane, deps) -> segments
   install_ui_tab_title = true,
   install_ui_status = true,
-  install_tab_bar_style = true,     -- fancy tab bar + hide close/new-tab buttons
+  install_tab_bar_style = true,     -- tab-bar tweaks for plugin UI (fancy / hide buttons / always show / width follows max_chars)
   install_keybinds = true,
 })
 ```
