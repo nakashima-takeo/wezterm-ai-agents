@@ -54,9 +54,9 @@ end
 local function pane_agent_info(pane_id, deps)
   local pane = wezterm.mux.get_pane(pane_id)
   if not pane then return nil, nil end
-  local impl, agent_opts = deps.agent.detect(pane, deps.opts)
+  -- detect()+state() の 2 回ではなく、状態ファイルを 1 回読んで (impl + state) を得る。
+  local impl, st = deps.agent.resolve(pane:pane_id(), deps.opts)
   if not impl then return nil, nil end
-  local st = impl.state(pane, agent_opts)
   local icon = impl.icons and impl.icons[st] or nil
   local color = impl.colors and impl.colors[st] or nil
   return icon, color, st
