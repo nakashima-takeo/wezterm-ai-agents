@@ -230,6 +230,7 @@ ai.apply(config, {
   right_status_extra = nil,         -- function(window, pane, deps) -> segments
   install_ui_tab_title = true,
   install_ui_status = true,
+  install_tab_bar_style = true,     -- fancy タブバー + 閉じる/新規ボタン非表示
   install_keybinds = true,
 })
 ```

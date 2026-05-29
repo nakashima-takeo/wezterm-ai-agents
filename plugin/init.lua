@@ -98,6 +98,7 @@ local default_opts = {
 
   install_ui_tab_title = true,
   install_ui_status = true,
+  install_tab_bar_style = true, -- fancy tab bar + ボタン非表示 (プラグインのタブUI向け)
   install_keybinds = true,
   disabled_keybinds = {},
   keybinds = {},
@@ -202,6 +203,12 @@ function M.apply(config, user_opts)
     opts = opts,
   }
   M.deps = deps
+
+  if opts.install_tab_bar_style then
+    config.use_fancy_tab_bar = true
+    config.show_close_tab_button_in_tabs = false
+    config.show_new_tab_button_in_tab_bar = false
+  end
 
   if opts.install_ui_tab_title then
     wezterm.on(
