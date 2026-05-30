@@ -237,6 +237,8 @@ function M.apply(config, user_opts)
   -- 並列ペインでエージェントを動かすため、フォーカス中ペイン由来 (OSC 9/777) の通知のみ抑制し、
   -- 同一タブの兄弟ペインの通知は出す。他の値: AlwaysShow / NeverShow / SuppressFromFocusedTab / SuppressFromFocusedWindow
   config.notification_handling = config.notification_handling or "SuppressFromFocusedPane"
+  -- エージェントの大量出力向けに既定 3500 から拡張。
+  config.scrollback_lines = config.scrollback_lines or 20000
 
   if opts.install_ui_tab_title then
     wezterm.on(
