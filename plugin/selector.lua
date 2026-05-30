@@ -222,9 +222,22 @@ end
 -- and confirm. Calls on_select(dir) on confirmation. WezTerm has no native path
 -- completion, so this is the substitute.
 local function pick_directory(window, pane, dir, L, folder_icon, on_select)
+  local function child(name) return (dir == "/" and "/" or dir .. "/") .. name end
+
   local choices = {}
-  table.insert(choices, { id = "_select", label = string.format(L.dir_select_here, shorten_path(dir)) })
+  -- The primary "confirm here" action — colored/bold to stand apart from the plain
+  -- navigation commands (up / mkdir) below it.
+  table.insert(choices, {
+    id = "_select",
+    label = wezterm.format({
+      { Foreground = { AnsiColor = "Green" } },
+      { Attribute = { Intensity = "Bold" } },
+      { Text = string.format(L.dir_select_here, shorten_path(dir)) },
+      "ResetAttributes",
+    }),
+  })
   if dir ~= "/" then table.insert(choices, { id = "_up", label = L.dir_go_up }) end
+  table.insert(choices, { id = "_mkdir", label = L.dir_make_new })
   for _, name in ipairs(list_subdirs(dir)) do
     table.insert(choices, { id = "dir:" .. name, label = folder_icon .. " " .. name })
   end
@@ -240,12 +253,30 @@ local function pick_directory(window, pane, dir, L, folder_icon, on_select)
           on_select(dir)
         elseif id == "_up" then
           pick_directory(iw, ip, parent_dir(dir), L, folder_icon, on_select)
+        elseif id == "_mkdir" then
+          iw:perform_action(
+            act.PromptInputLine({
+              description = L.enter_new_dir_name,
+              action = wezterm.action_callback(function(w2, p2, newname)
+                newname = newname and newname:gsub("^/+", ""):gsub("/+$", "") or ""
+                if newname == "" then
+                  pick_directory(w2, p2, dir, L, folder_icon, on_select)
+                  return
+                end
+                local target = child(newname)
+                if not wezterm.run_child_process({ "mkdir", "-p", target }) then
+                  toast(w2, string.format(L.mkdir_failed, newname))
+                  pick_directory(w2, p2, dir, L, folder_icon, on_select)
+                  return
+                end
+                pick_directory(w2, p2, target, L, folder_icon, on_select)
+              end),
+            }),
+            ip
+          )
         else
           local name = id:match("^dir:(.+)$")
-          if name then
-            local next_dir = (dir == "/" and "/" or dir .. "/") .. name
-            pick_directory(iw, ip, next_dir, L, folder_icon, on_select)
-          end
+          if name then pick_directory(iw, ip, child(name), L, folder_icon, on_select) end
         end
       end),
     }),
