@@ -215,6 +215,8 @@ function M.apply(config, user_opts)
   if config.macos_window_background_blur == nil and wezterm.target_triple:find("darwin") then config.macos_window_background_blur = 18 end
   config.window_decorations = config.window_decorations or "RESIZE"
   config.window_padding = config.window_padding or { left = 10, right = 10, top = 10, bottom = 6 }
+  -- 字形重視の軽いヒンティング (やや柔らかめ。WezTerm 既定は "Normal")。
+  config.freetype_load_target = config.freetype_load_target or "Light"
   -- フィールド単位で補う: 利用者が window_frame をフォント等のために設定していても titlebar 色は適用される。
   -- active=フォーカス中 / inactive=非フォーカス時の fancy タブバー背景色。
   config.window_frame = config.window_frame or {}
