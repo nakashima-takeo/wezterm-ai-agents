@@ -79,6 +79,32 @@ test("正常系：未設定の見た目デフォルトを補う", function()
   H.assert_eq(config.initial_rows, 30)
   H.assert_eq(config.window_frame.active_titlebar_bg, "#11111b")
   H.assert_eq(config.window_frame.inactive_titlebar_bg, "#11111b")
+  -- 日本語フォールバック (mock は darwin → Hiragino Sans)
+  H.assert_eq(config.font.fallback[1], "JetBrains Mono")
+  H.assert_eq(config.font.fallback[2], "Hiragino Sans")
+end)
+
+test("正常系：opts.font を渡すと primary になり日本語が自動付加される", function()
+  wezterm._events = {}
+  local init = load_mod("init")
+  local config = wezterm.config_builder()
+
+  init.apply(config, { plugin_dir = H.plugin_dir, font = "HackGen Nerd Font" })
+
+  H.assert_eq(config.font.fallback[1], "HackGen Nerd Font") -- primary は利用者指定
+  H.assert_eq(config.font.fallback[2], "Hiragino Sans") -- 日本語フォールバックは自動付加
+end)
+
+test("正常系：利用者が config.font を直接設定済みなら触らない (非破壊)", function()
+  wezterm._events = {}
+  local init = load_mod("init")
+  local config = wezterm.config_builder()
+
+  config.font = wezterm.font("HackGen Console NF")
+
+  init.apply(config, { plugin_dir = H.plugin_dir })
+
+  H.assert_eq(config.font.family, "HackGen Console NF") -- font_with_fallback で上書きされない
 end)
 
 test(
