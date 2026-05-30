@@ -49,7 +49,7 @@ local function load_modules(plugin_dir, enabled_agents)
 end
 
 local M = {
-  version = "0.7.0",
+  version = "0.8.0",
   workspace = nil,
   worktree = nil,
   layout = nil,
@@ -98,7 +98,6 @@ local default_opts = {
 
   install_ui_tab_title = true,
   install_ui_status = true,
-  install_tab_bar_style = true, -- fancy tab bar + ボタン非表示 (プラグインのタブUI向け)
   install_keybinds = true,
   disabled_keybinds = {},
   keybinds = {},
@@ -158,6 +157,7 @@ function M.apply(config, user_opts)
   end
 
   local icon_set = opts.nerd_font and builtin_icons.nerd or builtin_icons.unicode
+  opts.icons = icon_set
   for _, impl in ipairs(agent.all()) do
     impl.icons = icon_set
   end
@@ -204,14 +204,49 @@ function M.apply(config, user_opts)
   }
   M.deps = deps
 
-  if opts.install_tab_bar_style then
-    config.use_fancy_tab_bar = true
-    config.show_close_tab_button_in_tabs = false
-    config.show_new_tab_button_in_tab_bar = false
-    config.hide_tab_bar_if_only_one_tab = false -- 1タブ時もエージェント状態UIを表示
-    -- WezTerm の tab_max_width (既定16) がタブタイトル幅の上限になるため、max_chars に余裕分を足して連動させる。
-    config.tab_max_width = opts.ui.tab_title.max_chars + 8
-  end
+  -- 見た目・タブバーのデフォルトを常時・非破壊で適用する (キュレートされた見た目がこのプラグインのデフォルト)。
+  -- 利用者は config.X = ... を書けば自分の値に置換できる。
+  -- 文字列/数値/テーブルは `config.X = config.X or default`、bool は `if config.X == nil` で入れる
+  -- (bool に `or` を使うと利用者の false を true で潰してしまうため)。
+  -- フォントは環境依存のため対象外 (WezTerm 同梱の JetBrains Mono に任せる)。
+  local tt = opts.ui.tab_title
+  config.color_scheme = config.color_scheme or "Catppuccin Mocha"
+  config.window_background_opacity = config.window_background_opacity or 0.92
+  if config.macos_window_background_blur == nil and wezterm.target_triple:find("darwin") then config.macos_window_background_blur = 18 end
+  config.window_decorations = config.window_decorations or "RESIZE"
+  config.window_padding = config.window_padding or { left = 10, right = 10, top = 10, bottom = 6 }
+  -- RESIZE で閉じるボタンを除去し disable_quit で終了もNopしているため、誤爆は構造的に塞がれている。
+  -- 意図的クローズ時の確認は摩擦でしかないので NeverPrompt。
+  config.window_close_confirmation = config.window_close_confirmation or "NeverPrompt"
+  -- 字形重視の軽いヒンティング (やや柔らかめ。WezTerm 既定は "Normal")。
+  config.freetype_load_target = config.freetype_load_target or "Light"
+  -- WezTerm 既定 80x24 は手狭。セル数なので環境非依存 (Windows Terminal も 120x30 を共通既定に採用)。
+  config.initial_cols = config.initial_cols or 120
+  config.initial_rows = config.initial_rows or 30
+  -- フィールド単位で補う: 利用者が window_frame をフォント等のために設定していても titlebar 色は適用される。
+  -- active=フォーカス中 / inactive=非フォーカス時の fancy タブバー背景色。
+  config.window_frame = config.window_frame or {}
+  if config.window_frame.active_titlebar_bg == nil then config.window_frame.active_titlebar_bg = tt.inactive_bg end
+  if config.window_frame.inactive_titlebar_bg == nil then config.window_frame.inactive_titlebar_bg = tt.inactive_bg end
+  config.colors = config.colors or {}
+  config.colors.tab_bar = config.colors.tab_bar
+    or {
+      background = tt.inactive_bg,
+      active_tab = { bg_color = tt.active_bg, fg_color = tt.active_fg },
+      inactive_tab = { bg_color = tt.inactive_bg, fg_color = tt.inactive_fg },
+      inactive_tab_hover = { bg_color = tt.active_bg, fg_color = opts.ui.right_status.fg },
+    }
+  if config.use_fancy_tab_bar == nil then config.use_fancy_tab_bar = true end
+  if config.show_close_tab_button_in_tabs == nil then config.show_close_tab_button_in_tabs = false end
+  if config.show_new_tab_button_in_tab_bar == nil then config.show_new_tab_button_in_tab_bar = false end
+  if config.hide_tab_bar_if_only_one_tab == nil then config.hide_tab_bar_if_only_one_tab = false end -- 1タブ時もエージェント状態UIを表示
+  -- WezTerm の tab_max_width (既定16) がタブタイトル幅の上限になるため、max_chars に余裕分を足して連動させる。
+  config.tab_max_width = config.tab_max_width or (tt.max_chars + 8)
+  -- 並列ペインでエージェントを動かすため、フォーカス中ペイン由来 (OSC 9/777) の通知のみ抑制し、
+  -- 同一タブの兄弟ペインの通知は出す。他の値: AlwaysShow / NeverShow / SuppressFromFocusedTab / SuppressFromFocusedWindow
+  config.notification_handling = config.notification_handling or "SuppressFromFocusedPane"
+  -- エージェントの大量出力向けに既定 3500 から拡張。
+  config.scrollback_lines = config.scrollback_lines or 20000
 
   if opts.install_ui_tab_title then
     wezterm.on(

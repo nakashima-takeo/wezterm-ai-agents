@@ -130,4 +130,14 @@ test("正常系：keybinds が空の場合はデフォルトが使われる", fu
   H.assert_not_nil(found, "default keybind should exist")
 end)
 
+test("正常系：ヘルプ (Cmd+Shift+H) が登録される", function()
+  local keys = build_with_opts({ disabled_keybinds = {}, keybinds = {} })
+  H.assert_not_nil(find_keybind(keys, "H", "CMD|SHIFT"), "help keybind should exist")
+end)
+
+test("disabled_keybinds でヘルプを無効化できる", function()
+  local keys = build_with_opts({ disabled_keybinds = { "help" }, keybinds = {} })
+  H.assert_nil(find_keybind(keys, "H", "CMD|SHIFT"), "disabled help keybind should not exist")
+end)
+
 H.finish()

@@ -108,6 +108,23 @@ local function shorten_path(path)
   return path
 end
 
+-- List immediate subdirectories (incl. hidden) of `dir`, sorted, names only.
+local function list_subdirs(dir)
+  local ok, stdout = wezterm.run_child_process({ "ls", "-1Ap", "--", dir })
+  if not ok or not stdout then return {} end
+  local dirs = {}
+  for line in stdout:gmatch("[^\n]+") do
+    if line:sub(-1) == "/" then table.insert(dirs, line:sub(1, -2)) end
+  end
+  return dirs
+end
+
+local function parent_dir(dir)
+  local parent = dir:gsub("/+$", ""):gsub("/[^/]*$", "")
+  if parent == "" then return "/" end
+  return parent
+end
+
 M.append_agents_colored = append_agents_colored
 M.append_ws_status = append_ws_status
 M.build_ws_header = build_ws_header
@@ -201,6 +218,72 @@ end
 
 -- ============== Workspace register (Cmd+Shift+N) ==============
 
+-- InputSelector-based directory navigator. Fuzzy-filter subdirs, drill in/out,
+-- and confirm. Calls on_select(dir) on confirmation. WezTerm has no native path
+-- completion, so this is the substitute.
+local function pick_directory(window, pane, dir, L, folder_icon, on_select)
+  local function child(name) return (dir == "/" and "/" or dir .. "/") .. name end
+
+  local choices = {}
+  -- The primary "confirm here" action — colored/bold to stand apart from the plain
+  -- navigation commands (up / mkdir) below it.
+  table.insert(choices, {
+    id = "_select",
+    label = wezterm.format({
+      { Foreground = { AnsiColor = "Green" } },
+      { Attribute = { Intensity = "Bold" } },
+      { Text = string.format(L.dir_select_here, shorten_path(dir)) },
+      "ResetAttributes",
+    }),
+  })
+  if dir ~= "/" then table.insert(choices, { id = "_up", label = L.dir_go_up }) end
+  table.insert(choices, { id = "_mkdir", label = L.dir_make_new })
+  for _, name in ipairs(list_subdirs(dir)) do
+    table.insert(choices, { id = "dir:" .. name, label = folder_icon .. " " .. name })
+  end
+
+  window:perform_action(
+    act.InputSelector({
+      title = string.format(L.dir_picker_title, shorten_path(dir)),
+      choices = choices,
+      fuzzy = true,
+      action = wezterm.action_callback(function(iw, ip, id)
+        if not id then return end
+        if id == "_select" then
+          on_select(dir)
+        elseif id == "_up" then
+          pick_directory(iw, ip, parent_dir(dir), L, folder_icon, on_select)
+        elseif id == "_mkdir" then
+          iw:perform_action(
+            act.PromptInputLine({
+              description = L.enter_new_dir_name,
+              action = wezterm.action_callback(function(w2, p2, newname)
+                newname = newname and newname:gsub("^/+", ""):gsub("/+$", "") or ""
+                if newname == "" then
+                  pick_directory(w2, p2, dir, L, folder_icon, on_select)
+                  return
+                end
+                local target = child(newname)
+                if not wezterm.run_child_process({ "mkdir", "-p", target }) then
+                  toast(w2, string.format(L.mkdir_failed, newname))
+                  pick_directory(w2, p2, dir, L, folder_icon, on_select)
+                  return
+                end
+                pick_directory(w2, p2, target, L, folder_icon, on_select)
+              end),
+            }),
+            ip
+          )
+        else
+          local name = id:match("^dir:(.+)$")
+          if name then pick_directory(iw, ip, child(name), L, folder_icon, on_select) end
+        end
+      end),
+    }),
+    pane
+  )
+end
+
 function M.workspace_register(window, pane, deps)
   local opts = deps.opts
   local L = opts.labels
@@ -210,38 +293,33 @@ function M.workspace_register(window, pane, deps)
     return
   end
 
-  local default_name = cwd_path:gsub("/$", ""):match("([^/]+)$") or ""
+  local folder_icon = (opts.icons and opts.icons.folder) or "📁"
 
-  window:perform_action(
-    act.PromptInputLine({
-      description = string.format(L.enter_ws_name, default_name),
-      action = wezterm.action_callback(function(iw, ip, name)
-        if name == nil then return end
-        if name == "" then name = default_name end
-        iw:perform_action(
-          act.PromptInputLine({
-            description = L.enter_cwd,
-            initial_value = cwd_path,
-            action = wezterm.action_callback(function(cw, _cp, cwd)
-              if not cwd or cwd == "" then return end
-              cwd = cwd:gsub("/$", "")
-              local data = deps.workspace.read(opts.workspace)
-              local ws, idx = deps.workspace.find(data, name)
-              if ws then
-                data.workspaces[idx] = { name = name, cwd = cwd, tabs = ws.tabs }
-              else
-                table.insert(data.workspaces, { name = name, cwd = cwd, lastUsed = os.time() })
-              end
-              deps.workspace.write(opts.workspace, data)
-              toast(cw, string.format(L.ws_registered, name, cwd))
-            end),
-          }),
-          ip
-        )
-      end),
-    }),
-    pane
-  )
+  -- Pick the directory first, then suggest a workspace name from its basename.
+  pick_directory(window, pane, cwd_path:gsub("/+$", ""):gsub("^$", "/"), L, folder_icon, function(cwd)
+    cwd = cwd:gsub("/+$", ""):gsub("^$", "/")
+    local default_name = cwd:match("([^/]+)$") or ""
+    window:perform_action(
+      act.PromptInputLine({
+        description = L.enter_ws_name,
+        initial_value = default_name,
+        action = wezterm.action_callback(function(iw, _ip, name)
+          if name == nil then return end
+          if name == "" then name = default_name end
+          local data = deps.workspace.read(opts.workspace)
+          local ws, idx = deps.workspace.find(data, name)
+          if ws then
+            data.workspaces[idx] = { name = name, cwd = cwd, tabs = ws.tabs }
+          else
+            table.insert(data.workspaces, { name = name, cwd = cwd, lastUsed = os.time() })
+          end
+          deps.workspace.write(opts.workspace, data)
+          toast(iw, string.format(L.ws_registered, name, cwd))
+        end),
+      }),
+      pane
+    )
+  end)
 end
 
 -- ============== Workspace delete ==============
@@ -801,6 +879,98 @@ function M.agent_selector(window, pane, deps)
   )
 end
 
+-- ============== Help (Cmd+Shift+H) ==============
+
+-- Nerd Font: Apple 修飾キー専用グリフ。PUA の単一セルグリフなので桁ずれ・被りが起きない
+local nf = wezterm.nerdfonts
+local NERD_KEYS = {
+  LeftArrow = nf.md_arrow_left_bold,
+  RightArrow = nf.md_arrow_right_bold,
+  UpArrow = nf.md_arrow_up_bold,
+  DownArrow = nf.md_arrow_down_bold,
+  Enter = nf.md_keyboard_return,
+  Backspace = nf.md_keyboard_backspace,
+}
+local NERD_MODS = {
+  { "CTRL", nf.md_apple_keyboard_control },
+  { "OPT", nf.md_apple_keyboard_option },
+  { "SHIFT", nf.md_apple_keyboard_shift },
+  { "CMD", nf.md_apple_keyboard_command },
+}
+-- Unicode フォールバック (nerd_font = false 時)。⇧ と矢印は ambiguous width なのでスペースで分離する
+local UNICODE_KEYS = {
+  LeftArrow = "\xE2\x86\x90", -- ←
+  RightArrow = "\xE2\x86\x92", -- →
+  UpArrow = "\xE2\x86\x91", -- ↑
+  DownArrow = "\xE2\x86\x93", -- ↓
+  Enter = "\xE2\x8F\x8E", -- ⏎
+  Backspace = "\xE2\x8C\xAB", -- ⌫
+}
+-- mac 慣習の表示順 (⌃⌥⇧⌘)
+local UNICODE_MODS = {
+  { "CTRL", "\xE2\x8C\x83" }, -- ⌃
+  { "OPT", "\xE2\x8C\xA5" }, -- ⌥
+  { "SHIFT", "\xE2\x87\xA7" }, -- ⇧
+  { "CMD", "\xE2\x8C\x98" }, -- ⌘
+}
+
+local function format_keybind(key, mods, nerd)
+  local mod_set = nerd and NERD_MODS or UNICODE_MODS
+  local key_set = nerd and NERD_KEYS or UNICODE_KEYS
+  local present = {}
+  for m in mods:gmatch("[^|]+") do
+    present[m] = true
+  end
+  local parts = {}
+  for _, pair in ipairs(mod_set) do
+    if present[pair[1]] then
+      table.insert(parts, pair[2])
+      present[pair[1]] = nil
+    end
+  end
+  for m in mods:gmatch("[^|]+") do
+    if present[m] then table.insert(parts, m) end -- 記号未定義の修飾キーはそのまま
+  end
+  table.insert(parts, key_set[key] or key)
+  -- 記号/グリフが詰まって見えないよう間にスペースを挟む
+  return table.concat(parts, " ")
+end
+
+function M.help_selector(window, pane, deps, items)
+  local L = deps.opts.labels
+  local choices = {}
+  local last_group = nil
+  for i, it in ipairs(items) do
+    if it.group ~= last_group then
+      last_group = it.group
+      table.insert(choices, { id = "_sep_" .. i, label = "── " .. (L[it.group] or it.group) .. " ──" })
+    end
+    local fmt = {
+      { Attribute = { Intensity = "Bold" } },
+      { Foreground = { AnsiColor = "Aqua" } },
+      { Text = format_keybind(it.key, it.mods, deps.opts.nerd_font) },
+      "ResetAttributes",
+      { Text = "  " .. (L[it.desc] or it.desc) },
+    }
+    table.insert(choices, { id = "item:" .. i, label = wezterm.format(fmt) })
+  end
+
+  window:perform_action(
+    act.InputSelector({
+      title = "Help",
+      choices = choices,
+      fuzzy = true,
+      action = wezterm.action_callback(function(iw, ip, id)
+        if not id or id:match("^_sep_") then return end
+        local i = tonumber(id:match("^item:(%d+)$"))
+        local it = i and items[i]
+        if it and it.runnable and it.action then iw:perform_action(it.action, ip) end
+      end),
+    }),
+    pane
+  )
+end
+
 -- ============== Keybinds factory ==============
 
 local function is_last_window_in_workspace(window)
@@ -817,6 +987,7 @@ local function is_last_pane(window) return #window:mux_window():active_tab():pan
 function M.build_keybinds(deps)
   local opts = deps.opts
   local keys = {}
+  local help_items = {}
   local disabled = {}
   for _, k in ipairs(opts.disabled_keybinds or {}) do
     disabled[k] = true
@@ -826,7 +997,7 @@ function M.build_keybinds(deps)
   local prefix = opts.modifier_prefix or "CMD"
   local overridden = {}
 
-  local function add(id, entry)
+  local function add(id, entry, help)
     if disabled[id] then return end
     if prefix ~= "CMD" then entry.mods = entry.mods:gsub("CMD", prefix) end
     local ov = overrides[id]
@@ -837,20 +1008,26 @@ function M.build_keybinds(deps)
       entry.mods = ov.mods or entry.mods
     end
     table.insert(keys, entry)
+    if help then
+      table.insert(help_items, {
+        group = help.group,
+        desc = help.desc,
+        runnable = help.runnable or false,
+        key = entry.key,
+        mods = entry.mods,
+        action = entry.action,
+      })
+    end
   end
 
+  -- 注意: help_items は help 付き add の呼び出し順で並ぶ。ヘルプの表示順 = ここでの記述順
+  -- Workspace & Agent
   add("workspace_selector", {
     key = "S",
     mods = "CMD|SHIFT",
     action = wezterm.action_callback(function(w, p) M.workspace_selector(w, p, deps) end),
-  })
-  add("worktree_selector", {
-    key = "X",
-    mods = "CMD|SHIFT",
-    action = wezterm.action_callback(function(w, p) M.worktree_selector(w, p, deps) end),
-  })
+  }, { group = "help_group_main", desc = "help_workspace", runnable = true })
 
-  -- Default agent spawn
   local default_agent = opts.default_agent and deps.agent.get(opts.default_agent) or deps.agent.all()[1]
   if default_agent then
     add("agent_spawn", {
@@ -863,17 +1040,15 @@ function M.build_keybinds(deps)
         local env = deps.agent.spawn_env(agent_opts)
         window:perform_action(act.SpawnCommandInNewTab({ args = args, set_environment_variables = env }), pane)
       end),
-    })
+    }, { group = "help_group_main", desc = "help_agent_spawn", runnable = true })
   end
 
-  -- Agent selector
   add("agent_selector", {
     key = "A",
     mods = "CMD|SHIFT",
     action = wezterm.action_callback(function(window, pane) M.agent_selector(window, pane, deps) end),
-  })
+  }, { group = "help_group_main", desc = "help_agent_selector", runnable = true })
 
-  -- Open editor
   add("open_editor", {
     key = "E",
     mods = "CMD|SHIFT",
@@ -890,9 +1065,15 @@ function M.build_keybinds(deps)
       end
       wezterm.background_child_process({ editor, cwd })
     end),
-  })
+  }, { group = "help_group_main", desc = "help_open_editor", runnable = true })
 
-  -- Tab management with workspace sync
+  add("worktree_selector", {
+    key = "X",
+    mods = "CMD|SHIFT",
+    action = wezterm.action_callback(function(w, p) M.worktree_selector(w, p, deps) end),
+  }, { group = "help_group_main", desc = "help_worktree", runnable = true })
+
+  -- Tab & Pane (with workspace sync)
   add("new_tab", {
     key = "t",
     mods = "CMD",
@@ -900,17 +1081,7 @@ function M.build_keybinds(deps)
       deps.layout.add_tab(window, nil, deps.workspace, opts)
       window:perform_action(act.SpawnTab("CurrentPaneDomain"), pane)
     end),
-  })
-  local function move_tab(direction)
-    return wezterm.action_callback(function(window, pane)
-      deps.layout.move_tab(window, direction, deps.workspace, opts)
-      window:perform_action(act.MoveTabRelative(direction), pane)
-    end)
-  end
-  add("move_tab_left", { key = "[", mods = "CMD|SHIFT", action = move_tab(-1) })
-  add("move_tab_left", { key = "{", mods = "CMD|SHIFT", action = move_tab(-1) })
-  add("move_tab_right", { key = "]", mods = "CMD|SHIFT", action = move_tab(1) })
-  add("move_tab_right", { key = "}", mods = "CMD|SHIFT", action = move_tab(1) })
+  }, { group = "help_group_tab", desc = "help_new_tab" })
 
   add("close_tab", {
     key = "w",
@@ -920,7 +1091,47 @@ function M.build_keybinds(deps)
       deps.layout.remove_tab(window, deps.workspace, opts)
       window:perform_action(act.CloseCurrentTab({ confirm = false }), pane)
     end),
-  })
+  }, { group = "help_group_tab", desc = "help_close_tab" })
+
+  add(
+    "next_tab",
+    { key = "RightArrow", mods = "CMD|SHIFT", action = act.ActivateTabRelative(1) },
+    { group = "help_group_tab", desc = "help_next_tab" }
+  )
+  add(
+    "prev_tab",
+    { key = "LeftArrow", mods = "CMD|SHIFT", action = act.ActivateTabRelative(-1) },
+    { group = "help_group_tab", desc = "help_prev_tab" }
+  )
+
+  local function move_tab(direction)
+    return wezterm.action_callback(function(window, pane)
+      deps.layout.move_tab(window, direction, deps.workspace, opts)
+      window:perform_action(act.MoveTabRelative(direction), pane)
+    end)
+  end
+  add("move_tab_left", { key = "[", mods = "CMD|SHIFT", action = move_tab(-1) }, { group = "help_group_tab", desc = "help_move_tab_left" })
+  add("move_tab_left", { key = "{", mods = "CMD|SHIFT", action = move_tab(-1) })
+  add("move_tab_right", { key = "]", mods = "CMD|SHIFT", action = move_tab(1) }, { group = "help_group_tab", desc = "help_move_tab_right" })
+  add("move_tab_right", { key = "}", mods = "CMD|SHIFT", action = move_tab(1) })
+
+  add("split_right", {
+    key = "/",
+    mods = "CMD|OPT",
+    action = wezterm.action_callback(function(window, pane)
+      deps.layout.add_split(window, pane, "right", deps.workspace, opts)
+      window:perform_action(act.SplitHorizontal({ domain = "CurrentPaneDomain" }), pane)
+    end),
+  }, { group = "help_group_tab", desc = "help_split_right" })
+  add("split_bottom", {
+    key = "-",
+    mods = "CMD|OPT",
+    action = wezterm.action_callback(function(window, pane)
+      deps.layout.add_split(window, pane, "bottom", deps.workspace, opts)
+      window:perform_action(act.SplitVertical({ domain = "CurrentPaneDomain" }), pane)
+    end),
+  }, { group = "help_group_tab", desc = "help_split_bottom" })
+
   add("close_pane", {
     key = "w",
     mods = "CMD|OPT",
@@ -932,53 +1143,9 @@ function M.build_keybinds(deps)
         wezterm.time.call_after(0.1, function() pcall(deps.layout.refresh_after_pane_close, window, deps.workspace, opts) end)
       end
     end),
-  })
+  }, { group = "help_group_tab", desc = "help_close_pane" })
 
-  add("split_right", {
-    key = "/",
-    mods = "CMD|OPT",
-    action = wezterm.action_callback(function(window, pane)
-      deps.layout.add_split(window, pane, "right", deps.workspace, opts)
-      window:perform_action(act.SplitHorizontal({ domain = "CurrentPaneDomain" }), pane)
-    end),
-  })
-  add("split_bottom", {
-    key = "-",
-    mods = "CMD|OPT",
-    action = wezterm.action_callback(function(window, pane)
-      deps.layout.add_split(window, pane, "bottom", deps.workspace, opts)
-      window:perform_action(act.SplitVertical({ domain = "CurrentPaneDomain" }), pane)
-    end),
-  })
-
-  -- Disable CMD+Q (accidental quit prevention)
-  add("disable_quit", { key = "q", mods = "CMD", action = act.Nop })
-
-  -- OPT+Enter passthrough
-  add("opt_enter", { key = "Enter", mods = "OPT", action = act.SendKey({ key = "Enter", mods = "OPT" }) })
-
-  -- Pane navigation
-  add("activate_pane_left", { key = "LeftArrow", mods = "CMD|OPT", action = act.ActivatePaneDirection("Left") })
-  add("activate_pane_right", { key = "RightArrow", mods = "CMD|OPT", action = act.ActivatePaneDirection("Right") })
-  add("activate_pane_up", { key = "UpArrow", mods = "CMD|OPT", action = act.ActivatePaneDirection("Up") })
-  add("activate_pane_down", { key = "DownArrow", mods = "CMD|OPT", action = act.ActivatePaneDirection("Down") })
-
-  -- Scroll
-  add("scroll_to_top", { key = "UpArrow", mods = "CMD", action = act.ScrollToTop })
-  add("scroll_to_bottom", { key = "DownArrow", mods = "CMD", action = act.ScrollToBottom })
-  add("scroll_page_up", { key = "UpArrow", mods = "OPT", action = act.ScrollByPage(-1) })
-  add("scroll_page_down", { key = "DownArrow", mods = "OPT", action = act.ScrollByPage(1) })
-
-  -- Line start / end / delete
-  add("line_start", { key = "LeftArrow", mods = "CMD", action = act.SendKey({ key = "a", mods = "CTRL" }) })
-  add("line_end", { key = "RightArrow", mods = "CMD", action = act.SendKey({ key = "e", mods = "CTRL" }) })
-  add("line_delete", { key = "Backspace", mods = "CMD", action = act.SendKey({ key = "u", mods = "CTRL" }) })
-
-  -- Tab navigation
-  add("next_tab", { key = "RightArrow", mods = "CMD|SHIFT", action = act.ActivateTabRelative(1) })
-  add("prev_tab", { key = "LeftArrow", mods = "CMD|SHIFT", action = act.ActivateTabRelative(-1) })
-
-  -- Always-on-top toggle
+  -- Window
   add("pin_toggle", {
     key = "P",
     mods = "CMD|SHIFT",
@@ -995,7 +1162,32 @@ function M.build_keybinds(deps)
         toast(window, L.pin_on, 2000)
       end
     end),
-  })
+  }, { group = "help_group_window", desc = "help_pin_toggle", runnable = true })
+
+  -- Help (keybind cheatsheet, generated from the bindings above)
+  add("help", {
+    key = "H",
+    mods = "CMD|SHIFT",
+    action = wezterm.action_callback(function(window, pane) M.help_selector(window, pane, deps, help_items) end),
+  }, { group = "help_group_window", desc = "help_help" })
+
+  -- ヘルプに表示しないキー (パススルー / ナビゲーション / 行編集)
+  add("disable_quit", { key = "q", mods = "CMD", action = act.Nop }) -- CMD+Q 誤操作防止
+  add("opt_enter", { key = "Enter", mods = "OPT", action = act.SendKey({ key = "Enter", mods = "OPT" }) })
+
+  add("activate_pane_left", { key = "LeftArrow", mods = "CMD|OPT", action = act.ActivatePaneDirection("Left") })
+  add("activate_pane_right", { key = "RightArrow", mods = "CMD|OPT", action = act.ActivatePaneDirection("Right") })
+  add("activate_pane_up", { key = "UpArrow", mods = "CMD|OPT", action = act.ActivatePaneDirection("Up") })
+  add("activate_pane_down", { key = "DownArrow", mods = "CMD|OPT", action = act.ActivatePaneDirection("Down") })
+
+  add("scroll_to_top", { key = "UpArrow", mods = "CMD", action = act.ScrollToTop })
+  add("scroll_to_bottom", { key = "DownArrow", mods = "CMD", action = act.ScrollToBottom })
+  add("scroll_page_up", { key = "UpArrow", mods = "OPT", action = act.ScrollByPage(-1) })
+  add("scroll_page_down", { key = "DownArrow", mods = "OPT", action = act.ScrollByPage(1) })
+
+  add("line_start", { key = "LeftArrow", mods = "CMD", action = act.SendKey({ key = "a", mods = "CTRL" }) })
+  add("line_end", { key = "RightArrow", mods = "CMD", action = act.SendKey({ key = "e", mods = "CTRL" }) })
+  add("line_delete", { key = "Backspace", mods = "CMD", action = act.SendKey({ key = "u", mods = "CTRL" }) })
 
   return keys
 end
