@@ -207,7 +207,6 @@ ai.apply(config, {
   modifier_prefix = "CMD",          -- auto-detected: macOS="CMD", Linux="CTRL"
   workspace = {
     file = wezterm.home_dir .. "/.wezterm-workspaces.json",
-    default_workspace = "default",
   },
   worktree = {
     path = "sibling",  -- "sibling" | "subdirectory" | "{parent}/.worktrees/{branch}" etc.

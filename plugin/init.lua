@@ -49,7 +49,7 @@ local function load_modules(plugin_dir, enabled_agents)
 end
 
 local M = {
-  version = "0.9.0",
+  version = "0.9.1",
   workspace = nil,
   worktree = nil,
   layout = nil,
@@ -63,7 +63,8 @@ local M = {
 local default_opts = {
   workspace = {
     file = wezterm.home_dir .. "/.wezterm-workspaces.json",
-    default_workspace = "default",
+    -- default_workspace は持たない。WezTerm 本体の config.default_workspace を単一の真実源とし、
+    -- apply() 内で opts.workspace.default_workspace に反映する (起動 WS 名との食い違いを構造的に防ぐ)。
   },
   default_tabs = { {}, {} },
 
@@ -103,7 +104,7 @@ local default_opts = {
   disabled_keybinds = {},
   keybinds = {},
   modifier_prefix = wezterm.target_triple:find("darwin") and "CMD" or "CTRL",
-  locale = (os.getenv("LANG") or ""):sub(1, 2) == "ja" and "ja" or "en",
+  locale = nil, -- nil = apply() 時に自動判定 (detect_locale)。"ja"/"en" を明示指定で固定も可
 
   status_update_interval = 1, -- right-status refresh (sec)
   session_sync_interval = 5, -- workspace full snapshot sync (sec)
@@ -141,11 +142,29 @@ local function merge(base, override)
   return out
 end
 
+-- 表示言語の判定。POSIX のロケール優先順位 (LC_ALL > LC_MESSAGES > LANG) に従う。
+-- すべて空かつ macOS の場合のみ、GUI 起動 (Dock 等) では環境変数が継承されず LANG が
+-- 空になるため、システムロケール (AppleLocale) を参照する。判定は言語部分の先頭2文字のみ。
+local function detect_locale()
+  local v = os.getenv("LC_ALL")
+  if not v or v == "" then v = os.getenv("LC_MESSAGES") end
+  if not v or v == "" then v = os.getenv("LANG") end
+  if (not v or v == "") and wezterm.target_triple:find("darwin") then
+    local ok, stdout = wezterm.run_child_process({ "defaults", "read", "-g", "AppleLocale" })
+    if ok then v = stdout end
+  end
+  return (v or ""):sub(1, 2) == "ja" and "ja" or "en"
+end
+
 -- ============== Apply ==============
 
 function M.apply(config, user_opts)
   local opts = merge(default_opts, user_opts)
   M.opts = opts
+
+  -- 言語は apply ごとに判定し、設定リロードでシステム言語変更に追従する。
+  -- user_opts で明示指定があればそれを尊重 (merge 済み)。
+  opts.locale = opts.locale or detect_locale()
 
   local plugin_dir = detect_plugin_dir(opts.plugin_dir)
   load_modules(plugin_dir, opts.enabled_agents)
@@ -164,6 +183,11 @@ function M.apply(config, user_opts)
   end
 
   opts.labels = merge(builtin_labels[opts.locale] or builtin_labels.en, opts.labels or {})
+
+  -- 起動 WS 名の単一の真実源は WezTerm 本体の config.default_workspace (未設定なら WezTerm 既定 "default")。
+  -- selector はこの値で default WS を特別扱いするため、ここで opts に反映して食い違いを防ぐ。
+  opts.workspace.default_workspace = config.default_workspace or "default"
+
   M.hooks_dir = plugin_dir .. "/hooks"
   wezterm.log_info("wezterm-ai-agents v" .. M.version .. " loaded (hooks_dir = " .. M.hooks_dir .. ")")
 
@@ -273,6 +297,7 @@ function M.apply(config, user_opts)
     local last_status_tick = 0
     local last_sync_tick = 0
     local prev_win_id = nil
+    local prev_pane_id = {} -- win_id ごとのフォーカスペイン (マルチウィンドウで誤検出しないよう分離)
     wezterm.on("update-status", function(window, pane)
       local now = os.time()
       pcall(selector.maybe_prefetch, window, pane, deps)
@@ -282,7 +307,12 @@ function M.apply(config, user_opts)
         selector.pinned_windows[win_id] = true
       end
       prev_win_id = win_id
-      if (now - last_status_tick) >= opts.status_update_interval then
+      -- フォーカスペインが変わった瞬間は、そのペインの完了ベルを即クリアできるよう更新を強制する
+      -- (利用者が完了ペインに切替/フォーカスした直後にベルが残り続けるのを防ぐ)。
+      local pane_id = pane:pane_id()
+      local focus_changed = prev_pane_id[win_id] ~= pane_id
+      prev_pane_id[win_id] = pane_id
+      if focus_changed or (now - last_status_tick) >= opts.status_update_interval then
         last_status_tick = now
         local impl, agent_opts = agent.detect(pane, opts)
         if impl and impl.consume_done then pcall(impl.consume_done, pane, agent_opts) end
