@@ -104,7 +104,7 @@ local default_opts = {
   disabled_keybinds = {},
   keybinds = {},
   modifier_prefix = wezterm.target_triple:find("darwin") and "CMD" or "CTRL",
-  locale = (os.getenv("LANG") or ""):sub(1, 2) == "ja" and "ja" or "en",
+  locale = nil, -- nil = apply() 時に自動判定 (detect_locale)。"ja"/"en" を明示指定で固定も可
 
   status_update_interval = 1, -- right-status refresh (sec)
   session_sync_interval = 5, -- workspace full snapshot sync (sec)
@@ -142,11 +142,29 @@ local function merge(base, override)
   return out
 end
 
+-- 表示言語の判定。POSIX のロケール優先順位 (LC_ALL > LC_MESSAGES > LANG) に従う。
+-- すべて空かつ macOS の場合のみ、GUI 起動 (Dock 等) では環境変数が継承されず LANG が
+-- 空になるため、システムロケール (AppleLocale) を参照する。判定は言語部分の先頭2文字のみ。
+local function detect_locale()
+  local v = os.getenv("LC_ALL")
+  if not v or v == "" then v = os.getenv("LC_MESSAGES") end
+  if not v or v == "" then v = os.getenv("LANG") end
+  if (not v or v == "") and wezterm.target_triple:find("darwin") then
+    local ok, stdout = wezterm.run_child_process({ "defaults", "read", "-g", "AppleLocale" })
+    if ok then v = stdout end
+  end
+  return (v or ""):sub(1, 2) == "ja" and "ja" or "en"
+end
+
 -- ============== Apply ==============
 
 function M.apply(config, user_opts)
   local opts = merge(default_opts, user_opts)
   M.opts = opts
+
+  -- 言語は apply ごとに判定し、設定リロードでシステム言語変更に追従する。
+  -- user_opts で明示指定があればそれを尊重 (merge 済み)。
+  opts.locale = opts.locale or detect_locale()
 
   local plugin_dir = detect_plugin_dir(opts.plugin_dir)
   load_modules(plugin_dir, opts.enabled_agents)
