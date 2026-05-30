@@ -230,6 +230,9 @@ function M.apply(config, user_opts)
   if config.hide_tab_bar_if_only_one_tab == nil then config.hide_tab_bar_if_only_one_tab = false end -- 1タブ時もエージェント状態UIを表示
   -- WezTerm の tab_max_width (既定16) がタブタイトル幅の上限になるため、max_chars に余裕分を足して連動させる。
   config.tab_max_width = config.tab_max_width or (tt.max_chars + 8)
+  -- 並列ペインでエージェントを動かすため、フォーカス中ペイン由来 (OSC 9/777) の通知のみ抑制し、
+  -- 同一タブの兄弟ペインの通知は出す。他の値: AlwaysShow / NeverShow / SuppressFromFocusedTab / SuppressFromFocusedWindow
+  config.notification_handling = config.notification_handling or "SuppressFromFocusedPane"
 
   if opts.install_ui_tab_title then
     wezterm.on(
