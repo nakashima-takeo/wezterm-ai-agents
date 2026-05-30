@@ -63,7 +63,8 @@ local M = {
 local default_opts = {
   workspace = {
     file = wezterm.home_dir .. "/.wezterm-workspaces.json",
-    default_workspace = "default",
+    -- default_workspace は持たない。WezTerm 本体の config.default_workspace を単一の真実源とし、
+    -- apply() 内で opts.workspace.default_workspace に反映する (起動 WS 名との食い違いを構造的に防ぐ)。
   },
   default_tabs = { {}, {} },
 
@@ -164,6 +165,11 @@ function M.apply(config, user_opts)
   end
 
   opts.labels = merge(builtin_labels[opts.locale] or builtin_labels.en, opts.labels or {})
+
+  -- 起動 WS 名の単一の真実源は WezTerm 本体の config.default_workspace (未設定なら WezTerm 既定 "default")。
+  -- selector はこの値で default WS を特別扱いするため、ここで opts に反映して食い違いを防ぐ。
+  opts.workspace.default_workspace = config.default_workspace or "default"
+
   M.hooks_dir = plugin_dir .. "/hooks"
   wezterm.log_info("wezterm-ai-agents v" .. M.version .. " loaded (hooks_dir = " .. M.hooks_dir .. ")")
 
