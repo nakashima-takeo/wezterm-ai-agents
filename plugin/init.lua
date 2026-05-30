@@ -220,6 +220,9 @@ function M.apply(config, user_opts)
   config.window_close_confirmation = config.window_close_confirmation or "NeverPrompt"
   -- 字形重視の軽いヒンティング (やや柔らかめ。WezTerm 既定は "Normal")。
   config.freetype_load_target = config.freetype_load_target or "Light"
+  -- WezTerm 既定 80x24 は手狭。セル数なので環境非依存 (Windows Terminal も 120x30 を共通既定に採用)。
+  config.initial_cols = config.initial_cols or 120
+  config.initial_rows = config.initial_rows or 30
   -- フィールド単位で補う: 利用者が window_frame をフォント等のために設定していても titlebar 色は適用される。
   -- active=フォーカス中 / inactive=非フォーカス時の fancy タブバー背景色。
   config.window_frame = config.window_frame or {}
