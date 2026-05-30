@@ -297,6 +297,7 @@ function M.apply(config, user_opts)
     local last_status_tick = 0
     local last_sync_tick = 0
     local prev_win_id = nil
+    local prev_pane_id = {} -- win_id ごとのフォーカスペイン (マルチウィンドウで誤検出しないよう分離)
     wezterm.on("update-status", function(window, pane)
       local now = os.time()
       pcall(selector.maybe_prefetch, window, pane, deps)
@@ -306,7 +307,12 @@ function M.apply(config, user_opts)
         selector.pinned_windows[win_id] = true
       end
       prev_win_id = win_id
-      if (now - last_status_tick) >= opts.status_update_interval then
+      -- フォーカスペインが変わった瞬間は、そのペインの完了ベルを即クリアできるよう更新を強制する
+      -- (利用者が完了ペインに切替/フォーカスした直後にベルが残り続けるのを防ぐ)。
+      local pane_id = pane:pane_id()
+      local focus_changed = prev_pane_id[win_id] ~= pane_id
+      prev_pane_id[win_id] = pane_id
+      if focus_changed or (now - last_status_tick) >= opts.status_update_interval then
         last_status_tick = now
         local impl, agent_opts = agent.detect(pane, opts)
         if impl and impl.consume_done then pcall(impl.consume_done, pane, agent_opts) end
