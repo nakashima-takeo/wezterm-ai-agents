@@ -72,6 +72,7 @@ local default_opts = {
   },
 
   nerd_font = true,
+  font = nil, -- primary フォント (family 文字列 or { family=..., 属性 })。nil = JetBrains Mono。日本語フォールバックは自動付加
   status_dir = os.getenv("TMPDIR") or "/tmp",
   enabled_agents = nil, -- nil = all; or { "claude" } to register only specific agents
   default_agent = nil, -- nil = first registered; or "claude" to set default agent for Cmd+Shift+C
@@ -208,7 +209,8 @@ function M.apply(config, user_opts)
   -- 利用者は config.X = ... を書けば自分の値に置換できる。
   -- 文字列/数値/テーブルは `config.X = config.X or default`、bool は `if config.X == nil` で入れる
   -- (bool に `or` を使うと利用者の false を true で潰してしまうため)。
-  -- フォントは環境依存のため対象外 (WezTerm 同梱の JetBrains Mono に任せる)。
+  -- フォント本体 (font family) は環境依存のため指定しない。ただし WezTerm 同梱 JetBrains Mono は
+  -- 日本語を持たず、WezTerm のフォールバックも不出来なので、OS 標準の日本語フォントだけをフォールバックに足す。
   local tt = opts.ui.tab_title
   config.color_scheme = config.color_scheme or "Catppuccin Mocha"
   config.window_background_opacity = config.window_background_opacity or 0.92
@@ -223,6 +225,18 @@ function M.apply(config, user_opts)
   -- WezTerm 既定 80x24 は手狭。セル数なので環境非依存 (Windows Terminal も 120x30 を共通既定に採用)。
   config.initial_cols = config.initial_cols or 120
   config.initial_rows = config.initial_rows or 30
+  -- 日本語フォールバック: primary フォント (opts.font 既定 JetBrains Mono) に OS 標準の和文フォントを足す。
+  -- opts.font に好きなフォントを渡しても日本語が自動で付く (primary がその字を持てば primary 優先)。
+  -- 利用者が config.font を直接設定していれば触らない。WezTerm が既定フォールバックを後ろに自動付加する。
+  if config.font == nil then
+    local jp = "Noto Sans CJK JP" -- Linux: 標準保証はないが入っていれば改善、無ければ素のフォールバックのまま
+    if wezterm.target_triple:find("darwin") then
+      jp = "Hiragino Sans" -- macOS に自動インストールされる和文ゴシック
+    elseif wezterm.target_triple:find("windows") then
+      jp = "Yu Gothic"
+    end
+    config.font = wezterm.font_with_fallback({ opts.font or "JetBrains Mono", jp })
+  end
   -- フィールド単位で補う: 利用者が window_frame をフォント等のために設定していても titlebar 色は適用される。
   -- active=フォーカス中 / inactive=非フォーカス時の fancy タブバー背景色。
   config.window_frame = config.window_frame or {}

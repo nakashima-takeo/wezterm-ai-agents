@@ -181,6 +181,8 @@ function M.action_callback(fn) return { __callback = fn } end
 -- ===== misc =====
 M.nerdfonts = setmetatable({}, { __index = function() return "?" end })
 function M.default_hyperlink_rules() return {} end
+function M.font(name, attrs) return { family = name, attrs = attrs } end
+function M.font_with_fallback(list) return { fallback = list } end
 
 -- ===== mux =====
 M.mux = {
