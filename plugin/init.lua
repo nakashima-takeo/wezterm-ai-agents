@@ -215,7 +215,11 @@ function M.apply(config, user_opts)
   if config.macos_window_background_blur == nil and wezterm.target_triple:find("darwin") then config.macos_window_background_blur = 18 end
   config.window_decorations = config.window_decorations or "RESIZE"
   config.window_padding = config.window_padding or { left = 10, right = 10, top = 10, bottom = 6 }
-  config.window_frame = config.window_frame or { active_titlebar_bg = tt.inactive_bg, inactive_titlebar_bg = tt.inactive_bg }
+  -- フィールド単位で補う: 利用者が window_frame をフォント等のために設定していても titlebar 色は適用される。
+  -- active=フォーカス中 / inactive=非フォーカス時の fancy タブバー背景色。
+  config.window_frame = config.window_frame or {}
+  if config.window_frame.active_titlebar_bg == nil then config.window_frame.active_titlebar_bg = tt.inactive_bg end
+  if config.window_frame.inactive_titlebar_bg == nil then config.window_frame.inactive_titlebar_bg = tt.inactive_bg end
   config.colors = config.colors or {}
   config.colors.tab_bar = config.colors.tab_bar
     or {

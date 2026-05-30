@@ -72,7 +72,26 @@ test("正常系：未設定の見た目デフォルトを補う", function()
   H.assert_eq(config.window_decorations, "RESIZE")
   H.assert_eq(config.colors.tab_bar.background, "#11111b")
   H.assert_eq(config.notification_handling, "SuppressFromFocusedPane")
+  H.assert_eq(config.window_frame.active_titlebar_bg, "#11111b")
+  H.assert_eq(config.window_frame.inactive_titlebar_bg, "#11111b")
 end)
+
+test(
+  "正常系：window_frame は利用者の他フィールドを残しつつ titlebar 色を補う (フィールド単位非破壊)",
+  function()
+    wezterm._events = {}
+    local init = load_mod("init")
+    local config = wezterm.config_builder()
+
+    config.window_frame = { font_size = 12.0, active_titlebar_bg = "#ff0000" }
+
+    init.apply(config, { plugin_dir = H.plugin_dir })
+
+    H.assert_eq(config.window_frame.font_size, 12.0) -- 利用者の設定は残る
+    H.assert_eq(config.window_frame.active_titlebar_bg, "#ff0000") -- 明示値は潰さない
+    H.assert_eq(config.window_frame.inactive_titlebar_bg, "#11111b") -- 未設定フィールドは補う
+  end
+)
 
 test("正常系：見た目デフォルトは利用者の明示設定を潰さない (非破壊)", function()
   wezterm._events = {}
