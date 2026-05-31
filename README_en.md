@@ -80,7 +80,7 @@ ai.apply(config, { plugin_dir = plugin_dir })
 ## Hooks Setup
 
 Agent state detection requires configuring the bundled `hooks/agent_status.sh` in each agent's hooks.
-The script writes state as JSON to `$TMPDIR/wezterm-agent-<pane_id>` (falls back to `/tmp` if `$TMPDIR` is unset), which the plugin reads periodically.
+The script writes state as JSON to `$XDG_STATE_HOME/wezterm-ai-agents/<gui_pid>/wezterm-agent-<pane_id>` (falls back to `~/.local/state/wezterm-ai-agents` if `$XDG_STATE_HOME` is unset), which the plugin reads periodically. `<gui_pid>` is a per-GUI-process namespace so that running multiple WezTerm instances does not mix up state.
 
 ### Finding the hooks path
 
@@ -206,7 +206,8 @@ ai.apply(config, {
   locale = "ja",                    -- auto-detected from LANG env; "en" | "ja"
   modifier_prefix = "CMD",          -- auto-detected: macOS="CMD", Linux="CTRL"
   workspace = {
-    file = wezterm.home_dir .. "/.wezterm-workspaces.json",
+    -- Default: $XDG_STATE_HOME/wezterm-ai-agents/workspaces.json (or ~/.local/state/wezterm-ai-agents/workspaces.json if unset)
+    -- file = "/path/to/workspaces.json",
   },
   worktree = {
     path = "sibling",  -- "sibling" | "subdirectory" | "{parent}/.worktrees/{branch}" etc.

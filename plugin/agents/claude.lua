@@ -1,6 +1,6 @@
 -- Claude Code agent implementation.
 -- State comes from the unified JSON state file:
---   <status_dir>/wezterm-agent-<pane_id>
+--   <status_dir>/<gui_pid>/wezterm-agent-<pane_id>
 --   {"agent":"claude","state":"...","ts":...,"session_id":"..."}
 -- Written by hooks/agent_status.sh, invoked from ~/.claude/settings.json hooks.
 
