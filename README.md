@@ -208,7 +208,8 @@ ai.apply(config, {
   locale = "ja",                    -- auto-detected from LANG env; "en" | "ja"
   modifier_prefix = "CMD",          -- auto-detected: macOS="CMD", Linux="CTRL"
   workspace = {
-    file = wezterm.home_dir .. "/.wezterm-workspaces.json",
+    -- 既定: $XDG_STATE_HOME/wezterm-ai-agents/workspaces.json (未設定時は ~/.local/state/wezterm-ai-agents/workspaces.json)
+    -- file = "/path/to/workspaces.json",
   },
   worktree = {
     path = "sibling",  -- "sibling" | "subdirectory" | "{parent}/.worktrees/{branch}" 等のテンプレート

@@ -49,6 +49,13 @@ function M.write(opts, data)
   local tmp = opts.file .. ".tmp"
   local file = io.open(tmp, "w")
   if not file then
+    -- 初回・エージェント未起動時は base が不在になりうる。best-effort で作成し 1 度だけ再試行する。
+    -- (dir が在る通常パスではサブプロセスを spawn しない。)
+    local dir = opts.file:match("^(.*)/[^/]+$")
+    if dir then pcall(wezterm.run_child_process, { "mkdir", "-p", dir }) end
+    file = io.open(tmp, "w")
+  end
+  if not file then
     wezterm.log_error("workspace.write: failed to open " .. tmp)
     return
   end

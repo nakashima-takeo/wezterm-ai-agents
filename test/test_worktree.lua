@@ -252,7 +252,9 @@ end)
 test("pull_requestsはキャッシュからheadRefName→{number,state}のmapを返す", function()
   local worktree = load_mod("worktree")
   local git_root = "/tmp/__wt_pr_map_test"
-  local dir = (os.getenv("TMPDIR") or "/tmp"):gsub("/$", "")
+  -- worktree.lua の cache_base() と同一規則。新基底が不在だと H.write_file が落ちるため mkdir -p する。
+  local dir = (os.getenv("XDG_STATE_HOME") or (wezterm.home_dir .. "/.local/state")) .. "/wezterm-ai-agents"
+  os.execute("mkdir -p '" .. dir .. "'")
   local cache = dir .. "/wezterm-pr-" .. git_root:gsub("[^%w]", "_") .. ".json"
   H.write_file(cache, '[{"number":7,"headRefName":"feat/a","state":"OPEN","isCrossRepository":false}]')
 
@@ -282,7 +284,8 @@ end)
 test("pull_requestsはconfig刻印でブランチ名非依存に紐づける", function()
   local worktree = load_mod("worktree")
   local git_root = "/tmp/__wt_pr_cfg_test"
-  local dir = (os.getenv("TMPDIR") or "/tmp"):gsub("/$", "")
+  local dir = (os.getenv("XDG_STATE_HOME") or (wezterm.home_dir .. "/.local/state")) .. "/wezterm-ai-agents"
+  os.execute("mkdir -p '" .. dir .. "'")
   local cache = dir .. "/wezterm-pr-" .. git_root:gsub("[^%w]", "_") .. ".json"
   H.write_file(cache, '[{"number":12,"headRefName":"feat/fork","state":"OPEN","isCrossRepository":true}]')
   local original = wezterm.run_child_process

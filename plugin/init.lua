@@ -70,7 +70,9 @@ local M = {
 
 local default_opts = {
   workspace = {
-    file = wezterm.home_dir .. "/.wezterm-workspaces.json",
+    -- 状態ファイルと同一の base (XDG_STATE_HOME 配下) 直下に集約する。PID 名前空間は付けない
+    -- (全 GUI プロセスで共有するデータであり、名前空間配下に置くと PID 終了時の dir 掃除で消えるため)。
+    file = default_status_dir() .. "/workspaces.json",
     -- default_workspace は持たない。WezTerm 本体の config.default_workspace を単一の真実源とし、
     -- apply() 内で opts.workspace.default_workspace に反映する (起動 WS 名との食い違いを構造的に防ぐ)。
   },

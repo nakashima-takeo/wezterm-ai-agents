@@ -160,10 +160,15 @@ function M.fetch(git_root) return wezterm.run_child_process({ "git", "-C", git_r
 -- POSIX シングルクォートエスケープ (gh を cwd 指定で動かすため sh -lc に渡す)
 local function shq(s) return "'" .. s:gsub("'", "'\\''") .. "'" end
 
-local function pr_cache_file(git_root)
-  local dir = (os.getenv("TMPDIR") or "/tmp"):gsub("/$", "")
-  return dir .. "/wezterm-pr-" .. git_root:gsub("[^%w]", "_") .. ".json"
+-- PRキャッシュの保存先 base。状態ファイルと同一の XDG_STATE_HOME 配下 (名前空間なし) に集約する。
+-- init.lua の default_status_dir / hooks のフォールバックと同一規則 (素朴連結) で揃える。
+local function cache_base()
+  local base = os.getenv("XDG_STATE_HOME")
+  if not base or base == "" then base = wezterm.home_dir .. "/.local/state" end
+  return base .. "/wezterm-ai-agents"
 end
+
+local function pr_cache_file(git_root) return cache_base() .. "/wezterm-pr-" .. git_root:gsub("[^%w]", "_") .. ".json" end
 
 local GH_PR_LIST = "gh pr list --json number,headRefName,state,isCrossRepository,headRepositoryOwner --limit 200"
 
@@ -173,7 +178,16 @@ function M.prefetch(git_root)
   wezterm.background_child_process({ "git", "-C", git_root, "fetch", "--prune" })
   local cache = pr_cache_file(git_root)
   local tmp = shq(cache .. ".tmp")
-  local cmd = ("cd %s && %s > %s 2>/dev/null && mv %s %s"):format(shq(git_root), GH_PR_LIST, tmp, tmp, shq(cache))
+  -- 書き込み先 base を mkdir -p で保証する。io.open 経路と違いシェルの `> リダイレクト` 生成なので、
+  -- base 不在だとリダイレクトの時点で失敗する。前置しないと初回ワークスペース切替でキャッシュが作られない。
+  local cmd = ("mkdir -p %s && cd %s && %s > %s 2>/dev/null && mv %s %s"):format(
+    shq(cache_base()),
+    shq(git_root),
+    GH_PR_LIST,
+    tmp,
+    tmp,
+    shq(cache)
+  )
   wezterm.background_child_process({ "/bin/sh", "-lc", cmd })
 end
 
@@ -181,6 +195,7 @@ end
 function M.refresh_pr_cache(git_root)
   local ok, stdout = wezterm.run_child_process({ "/bin/sh", "-lc", "cd " .. shq(git_root) .. " && " .. GH_PR_LIST .. " 2>/dev/null" })
   if ok and stdout and stdout ~= "" then
+    pcall(wezterm.run_child_process, { "mkdir", "-p", cache_base() })
     local f = io.open(pr_cache_file(git_root), "w")
     if f then
       f:write(stdout)
