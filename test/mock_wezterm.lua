@@ -39,6 +39,19 @@ end
 function M.run_child_process(_args) return false, "", "(mock)" end
 function M.background_child_process(_args) end
 
+-- ===== filesystem =====
+-- 実 wezterm.read_dir に倣い、ディレクトリ直下のエントリを絶対パスで返す。
+function M.read_dir(dir)
+  local entries = {}
+  local p = io.popen('ls -1 "' .. dir .. '" 2>/dev/null')
+  if not p then return entries end
+  for name in p:lines() do
+    entries[#entries + 1] = dir .. "/" .. name
+  end
+  p:close()
+  return entries
+end
+
 -- ===== JSON (cjson if available, else pure-Lua fallback) =====
 local ok_cjson, cjson = pcall(require, "cjson")
 if ok_cjson then
@@ -183,6 +196,18 @@ M.nerdfonts = setmetatable({}, { __index = function() return "?" end })
 function M.default_hyperlink_rules() return {} end
 function M.font(name, attrs) return { family = name, attrs = attrs } end
 function M.font_with_fallback(list) return { fallback = list } end
+
+-- ===== procinfo =====
+-- _pid: このプロセスとみなす PID。_alive: 生存扱いする他 PID の集合 (キーは数値)。
+M.procinfo = {
+  _pid = 99999,
+  _alive = {},
+  pid = function() return M.procinfo._pid end,
+  get_info_for_pid = function(pid)
+    if pid == M.procinfo._pid or M.procinfo._alive[pid] then return { pid = pid } end
+    return nil
+  end,
+}
 
 -- ===== mux =====
 M.mux = {

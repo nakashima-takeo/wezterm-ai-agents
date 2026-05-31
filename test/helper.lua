@@ -101,6 +101,16 @@ function H.tmp_dir()
   return path
 end
 
+-- base + 自 PID 名前空間 dir。本体の読み取り経路が見る場所と一致させる。
+function H.ns_dir(base) return base .. "/" .. tostring(_G.wezterm.procinfo.pid()) end
+
+-- 状態ファイルを名前空間配下に書く (本体の読み取りと突き合うように)。
+function H.write_state(base, pane_id, content)
+  local d = H.ns_dir(base)
+  os.execute('mkdir -p "' .. d .. '"')
+  H.write_file(d .. "/wezterm-agent-" .. pane_id, content)
+end
+
 -- ===== Mock factories =====
 
 function H.mock_pane(id)

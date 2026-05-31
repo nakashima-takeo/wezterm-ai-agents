@@ -93,7 +93,7 @@ test("正常系：unknown状態のペインがカウントされる", function()
   agent.register(cursor)
 
   local pane = H.mock_pane("agg1")
-  H.write_file(tmp .. "/wezterm-agent-agg1", '{"agent":"cursor","state":"unknown","ts":1716000000,"session_id":""}')
+  H.write_state(tmp, "agg1", '{"agent":"cursor","state":"unknown","ts":1716000000,"session_id":""}')
 
   local mock_win = {
     get_workspace = function() return "test-ws" end,
@@ -113,6 +113,138 @@ test("正常系：unknown状態のペインがカウントされる", function()
 
   wezterm.mux.all_windows = orig
   os.execute("rm -rf " .. tmp)
+end)
+
+H.section("孤立状態ファイルの掃除 (sweep)")
+
+-- 生存 pane id 群から mock mux を組み、sweep 実行中だけ all_windows を差し替える。
+local function with_live_panes(live_ids, fn)
+  local panes = {}
+  for _, id in ipairs(live_ids) do
+    panes[#panes + 1] = H.mock_pane(id)
+  end
+  local win = {
+    get_workspace = function() return "ws" end,
+    tabs = function()
+      return { { panes = function() return panes end } }
+    end,
+  }
+  local orig = wezterm.mux.all_windows
+  wezterm.mux.all_windows = function() return { win } end
+  local ok, err = pcall(fn)
+  wezterm.mux.all_windows = orig
+  if not ok then error(err, 2) end
+end
+
+-- sweep は自 PID 名前空間配下のみを見るので、テストも名前空間配下に書く。
+local function nsd(dir) return dir .. "/" .. tostring(wezterm.procinfo.pid()) end
+local function touch(dir, name)
+  os.execute('mkdir -p "' .. nsd(dir) .. '"')
+  H.write_file(nsd(dir) .. "/" .. name, '{"agent":"claude","state":"working","ts":1,"session_id":""}')
+end
+
+local function exists(path)
+  local f = io.open(path, "r")
+  if f then
+    f:close()
+    return true
+  end
+  return false
+end
+
+test("正常系：生存集合に在るファイルは残し、無い id だけ消す", function()
+  local agent = load_mod("agent")
+  local tmp = H.tmp_dir()
+  touch(tmp, "wezterm-agent-1") -- 生存
+  touch(tmp, "wezterm-agent-2") -- 孤立
+
+  with_live_panes({ 1 }, function() agent.sweep_orphan_files({ status_dir = tmp }) end)
+
+  H.assert_true(exists(nsd(tmp) .. "/wezterm-agent-1"), "生存 id は残る")
+  H.assert_false(exists(nsd(tmp) .. "/wezterm-agent-2"), "孤立 id は消える")
+  os.execute("rm -rf " .. tmp)
+end)
+
+test("安全弁：生存集合が空のときは何も消さない", function()
+  local agent = load_mod("agent")
+  local tmp = H.tmp_dir()
+  touch(tmp, "wezterm-agent-1")
+
+  with_live_panes({}, function() agent.sweep_orphan_files({ status_dir = tmp }) end)
+
+  H.assert_true(exists(nsd(tmp) .. "/wezterm-agent-1"), "空集合では削除しない")
+  os.execute("rm -rf " .. tmp)
+end)
+
+test("正常系：数値 pane_id と文字列ファイル名 id が突き合う", function()
+  local agent = load_mod("agent")
+  local tmp = H.tmp_dir()
+  touch(tmp, "wezterm-agent-10")
+
+  -- mock_pane(10) は数値を返す。sweep は tostring で文字列化して突き合わせる。
+  with_live_panes({ 10 }, function() agent.sweep_orphan_files({ status_dir = tmp }) end)
+
+  H.assert_true(exists(nsd(tmp) .. "/wezterm-agent-10"), "数値 id と文字列ファイル名が一致し残る")
+  os.execute("rm -rf " .. tmp)
+end)
+
+test("正常系：.tmp 中間ファイルと非数値名は対象外", function()
+  local agent = load_mod("agent")
+  local tmp = H.tmp_dir()
+  touch(tmp, "wezterm-agent-2.tmp") -- 書き込み中の中間ファイル
+  touch(tmp, "wezterm-agent-foo") -- 非数値名
+  touch(tmp, "other-file")
+
+  with_live_panes({ 1 }, function() agent.sweep_orphan_files({ status_dir = tmp }) end)
+
+  H.assert_true(exists(nsd(tmp) .. "/wezterm-agent-2.tmp"), ".tmp は消さない")
+  H.assert_true(exists(nsd(tmp) .. "/wezterm-agent-foo"), "非数値名は消さない")
+  H.assert_true(exists(nsd(tmp) .. "/other-file"), "無関係ファイルは消さない")
+  os.execute("rm -rf " .. tmp)
+end)
+
+test("正常系：複数 dir を横断して掃除する", function()
+  local agent = load_mod("agent")
+  local d1, d2 = H.tmp_dir(), H.tmp_dir()
+  touch(d1, "wezterm-agent-2") -- 孤立 (共通 dir)
+  touch(d2, "wezterm-agent-3") -- 孤立 (エージェント別 dir)
+  touch(d2, "wezterm-agent-1") -- 生存 (エージェント別 dir)
+
+  with_live_panes({ 1 }, function() agent.sweep_orphan_files({ status_dir = d1, agents = { claude = { status_dir = d2 } } }) end)
+
+  H.assert_false(exists(nsd(d1) .. "/wezterm-agent-2"), "共通 dir の孤立は消える")
+  H.assert_false(exists(nsd(d2) .. "/wezterm-agent-3"), "別 dir の孤立も消える")
+  H.assert_true(exists(nsd(d2) .. "/wezterm-agent-1"), "別 dir の生存は残る")
+  os.execute("rm -rf " .. d1 .. " " .. d2)
+end)
+
+H.section("死んだ PID 名前空間の掃除 (cleanup_dead_namespaces)")
+
+local function seed_ns(base, pid, name)
+  local d = base .. "/" .. pid
+  os.execute('mkdir -p "' .. d .. '"')
+  H.write_file(d .. "/" .. name, '{"agent":"claude","state":"working","ts":1,"session_id":""}')
+end
+
+test("正常系：死んだ PID dir は削除し、自分と生存 PID dir は残す", function()
+  wezterm.procinfo._pid = 99999
+  wezterm.procinfo._alive = { [55555] = true }
+  local agent = load_mod("agent")
+  local base = H.tmp_dir()
+  seed_ns(base, "99999", "wezterm-agent-1") -- 自分
+  seed_ns(base, "55555", "wezterm-agent-1") -- 生存中の他プロセス
+  seed_ns(base, "12345", "wezterm-agent-1") -- 死んだプロセス
+  H.write_file(base .. "/wezterm-agent-7", "{}") -- 旧バージョンのフラット残置
+
+  agent.cleanup_dead_namespaces({ status_dir = base })
+
+  H.assert_true(exists(base .. "/99999/wezterm-agent-1"), "自 PID dir は残る")
+  H.assert_true(exists(base .. "/55555/wezterm-agent-1"), "生存 PID dir は残る")
+  H.assert_false(exists(base .. "/12345/wezterm-agent-1"), "死 PID dir は消える")
+  H.assert_false(exists(base .. "/12345"), "死 PID dir 自体も消える")
+  H.assert_false(exists(base .. "/wezterm-agent-7"), "フラットなレガシー残置は消える")
+  wezterm.procinfo._alive = {}
+  os.execute("rm -rf " .. base)
 end)
 
 H.finish()

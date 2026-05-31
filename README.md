@@ -80,7 +80,9 @@ ai.apply(config, { plugin_dir = plugin_dir })
 ## Hooks設定
 
 エージェント状態の検知には、プラグイン同梱の `hooks/agent_status.sh` をエージェント側のhooksに設定する必要があります。
-スクリプトは状態をJSONとして `$TMPDIR/wezterm-agent-<pane_id>`（`$TMPDIR` 未設定時は `/tmp`）に書き込み、プラグインが定期的に読み取ります。
+スクリプトは状態をJSONとして `$XDG_STATE_HOME/wezterm-ai-agents/<gui_pid>/wezterm-agent-<pane_id>`（`$XDG_STATE_HOME` 未設定時は `~/.local/state/wezterm-ai-agents`）に書き込み、プラグインが定期的に読み取ります。`<gui_pid>` は GUI プロセスごとの名前空間で、複数の WezTerm を同時起動しても状態が混ざらないようにするものです。
+
+> 状態検知は GUI プロセスが mux を内蔵する既定構成を前提とします。mux サーバを別プロセスで常駐させ `wezterm connect` で接続する分離構成・リモート多重化はサポート対象外です。
 
 ### hooks パスの確認
 
@@ -258,7 +260,6 @@ return {
   state(pane, opts)     -> "working" | "waiting" | "done" | "idle" | "error",
   session_id(pane, opts) -> string|nil,
   spawn_args(opts, session_id, cwd) -> table,
-  cleanup_stale(opts)   -> nil,
   default_opts = { ... },
 }
 ```

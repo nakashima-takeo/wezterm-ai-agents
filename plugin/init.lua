@@ -11,6 +11,14 @@
 
 local wezterm = require("wezterm")
 
+-- 状態ファイルの保存先。XDG_STATE_HOME 準拠の永続領域に置く (OS の reaping 対象外)。
+-- hooks/agent_status.sh のフォールバックと同一規則 (末尾スラッシュ正規化なしの素朴連結) で揃える。
+local function default_status_dir()
+  local base = os.getenv("XDG_STATE_HOME")
+  if not base or base == "" then base = wezterm.home_dir .. "/.local/state" end
+  return base .. "/wezterm-ai-agents"
+end
+
 -- ============== Module loader ==============
 
 local function detect_plugin_dir(user_dir)
@@ -74,7 +82,7 @@ local default_opts = {
 
   nerd_font = true,
   font = nil, -- primary フォント (family 文字列 or { family=..., 属性 })。nil = JetBrains Mono。日本語フォールバックは自動付加
-  status_dir = os.getenv("TMPDIR") or "/tmp",
+  status_dir = default_status_dir(),
   enabled_agents = nil, -- nil = all; or { "claude" } to register only specific agents
   default_agent = nil, -- nil = first registered; or "claude" to set default agent for Cmd+Shift+C
   default_editor = nil, -- nil = auto-detect (code/cursor/windsurf/zed/subl); or "/usr/local/bin/cursor" etc.
@@ -192,12 +200,9 @@ function M.apply(config, user_opts)
   wezterm.log_info("wezterm-ai-agents v" .. M.version .. " loaded (hooks_dir = " .. M.hooks_dir .. ")")
 
   wezterm.on("gui-startup", function()
-    for _, impl in ipairs(agent.all()) do
-      if impl.cleanup_stale then
-        local ok, err = pcall(impl.cleanup_stale, agent.opts_for(impl, opts))
-        if not ok then wezterm.log_warn("[ai-agents] cleanup_stale failed for " .. impl.id .. ": " .. tostring(err)) end
-      end
-    end
+    -- 死んだ GUI プロセスの状態ファイル名前空間と、旧バージョンのフラット残置を回収する。
+    local ok, err = pcall(agent.cleanup_dead_namespaces, opts)
+    if not ok then wezterm.log_warn("[ai-agents] cleanup_dead_namespaces failed: " .. tostring(err)) end
     wezterm.plugin.update_all()
   end)
 
@@ -322,6 +327,8 @@ function M.apply(config, user_opts)
       if (now - last_sync_tick) >= opts.session_sync_interval then
         last_sync_tick = now
         pcall(workspace.sync_all, opts.workspace, agent, layout, opts)
+        -- 生存 pane に対応しない孤立状態ファイルを掃除する (reaping を失った分を継続的に解消)。
+        pcall(agent.sweep_orphan_files, opts)
       end
     end)
   end
