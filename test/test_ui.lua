@@ -20,6 +20,18 @@ test("正常系：省略不要なパスはそのまま返す", function()
   H.assert_eq(ui.shorten_path(""), "")
 end)
 
+H.section("ステータスバー用パス幅収め (fixed_width)")
+
+test("正常系：超過時は前方(祖先)を残し末尾を切って … を付す", function()
+  local ui = load_mod("ui")
+  H.assert_eq(ui.fixed_width("~/g/wezterm-ai-agents", 20), "~/g/wezterm-ai-agen…")
+end)
+
+test("正常系：収まる場合は左パディングで桁を揃える", function()
+  local ui = load_mod("ui")
+  H.assert_eq(ui.fixed_width("~/code", 10), "    ~/code")
+end)
+
 H.section("ステータスバー集計セグメント")
 
 test("正常系：unknown状態がステータスバーに表示される", function()

@@ -41,13 +41,14 @@ local function display_cols(s)
   return n
 end
 
--- Keep the rightmost portion of the path and left-pad to a fixed column width.
+-- パスを幅 w に収める。前方(祖先)を残して末尾を切り、切った場合は "…" を付す。
+-- 短い場合は左パディングで桁を揃える (エージェント数表示との整列維持)。
 local function fixed_width(s, w)
-  s = wezterm.truncate_left(s, w)
-  local cols = display_cols(s)
-  if cols < w then s = string.rep(" ", w - cols) .. s end
-  return s
+  if display_cols(s) > w then return wezterm.truncate_right(s, w - 1) .. "…" end
+  return string.rep(" ", w - display_cols(s)) .. s
 end
+
+M.fixed_width = fixed_width
 
 -- ============== Tab title ==============
 
