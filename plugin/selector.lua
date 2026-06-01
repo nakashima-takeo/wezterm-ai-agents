@@ -303,7 +303,7 @@ function M.workspace_register(window, pane, deps)
       act.PromptInputLine({
         description = L.enter_ws_name,
         initial_value = default_name,
-        action = wezterm.action_callback(function(iw, _ip, name)
+        action = wezterm.action_callback(function(iw, ip, name)
           if name == nil then return end
           if name == "" then name = default_name end
           local data = deps.workspace.read(opts.workspace)
@@ -315,6 +315,11 @@ function M.workspace_register(window, pane, deps)
           end
           deps.workspace.write(opts.workspace, data)
           toast(iw, string.format(L.ws_registered, name, cwd))
+          if not deps.workspace.exists(name) then
+            local ws_config = deps.workspace.find(deps.workspace.read(opts.workspace), name)
+            deps.workspace.create(ws_config, deps.agent, deps.layout, opts, opts.default_tabs)
+          end
+          iw:perform_action(act.SwitchToWorkspace({ name = name }), ip)
         end),
       }),
       pane

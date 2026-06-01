@@ -57,7 +57,7 @@ local function load_modules(plugin_dir, enabled_agents)
 end
 
 local M = {
-  version = "0.10.0",
+  version = "0.11.0",
   workspace = nil,
   worktree = nil,
   layout = nil,
@@ -76,7 +76,7 @@ local default_opts = {
     -- default_workspace は持たない。WezTerm 本体の config.default_workspace を単一の真実源とし、
     -- apply() 内で opts.workspace.default_workspace に反映する (起動 WS 名との食い違いを構造的に防ぐ)。
   },
-  default_tabs = { {}, {} },
+  default_tabs = { {} },
 
   worktree = {
     path = "sibling", -- "sibling" | "subdirectory" | custom template with {git_root}, {parent}, {repo}, {branch}
