@@ -339,6 +339,42 @@ function M.uncovered_issues(issue_list, reachable)
   return out
 end
 
+-- logins に me が含まれるか。me が nil なら常に false (nil 同士の誤一致を防ぐ)。
+local function login_in(logins, me)
+  if not me then return false end
+  for _, l in ipairs(logins or {}) do
+    if l == me then return true end
+  end
+  return false
+end
+
+-- mine フラグ付与済みの list を「自分関係を先頭」に安定ソートする (破壊的)。
+-- newer_first=true は番号降順 (PR=新しい順)、false は昇順 (Issue)。
+local function sort_mine_first(list, newer_first)
+  table.sort(list, function(a, b)
+    if a.mine ~= b.mine then return a.mine end
+    if newer_first then return a.number > b.number end
+    return a.number < b.number
+  end)
+  return list
+end
+
+-- PR に「自分関係 (作成 or レビュー依頼)」フラグを付け、先頭に寄せて返す純関数。
+function M.relevant_prs(pr_list, me)
+  for _, pr in ipairs(pr_list) do
+    pr.mine = (me ~= nil and pr.author == me) or login_in(pr.review_requests, me)
+  end
+  return sort_mine_first(pr_list, true)
+end
+
+-- Issue に「自分アサイン」フラグを付け、先頭に寄せて返す純関数。
+function M.relevant_issues(issue_list, me)
+  for _, issue in ipairs(issue_list) do
+    issue.mine = login_in(issue.assignees, me)
+  end
+  return sort_mine_first(issue_list, false)
+end
+
 -- 自分の login を返す (assignee 強調用)。未取得なら nil。
 function M.current_user()
   local login = read_file(gh_user_cache_file()):gsub("%s+$", "")

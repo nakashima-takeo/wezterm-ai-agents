@@ -461,6 +461,23 @@ test("parse_issue_listは空・不正入力で空配列を返す", function()
   H.assert_eq(#worktree.parse_issue_list("[]"), 0) -- GraphQL構造でない配列も空扱い
 end)
 
+H.section("ログインユーザーの取得")
+
+test("current_user：キャッシュからloginを読み末尾空白を除去する", function()
+  local worktree = load_mod("worktree")
+  local dir = (os.getenv("XDG_STATE_HOME") or (wezterm.home_dir .. "/.local/state")) .. "/wezterm-ai-agents"
+  os.execute("mkdir -p '" .. dir .. "'")
+  local cache = dir .. "/wezterm-gh-user"
+  H.write_file(cache, "octocat\n")
+
+  H.assert_eq(worktree.current_user(), "octocat")
+
+  H.write_file(cache, "")
+  H.assert_nil(worktree.current_user()) -- 空キャッシュは nil
+
+  os.remove(cache)
+end)
+
 H.section("到達不能Issueの抽出")
 
 test("uncovered_issues：linkedBranchが到達可能ならリネーム済みでも除外する", function()
@@ -508,6 +525,56 @@ test("issues：linkedBranchesを反転してbranch→番号マップを返す", 
   os.remove(cache)
   H.assert_eq(map["my-fix"], 12) -- 任意名ブランチでも Issue 番号を逆引きできる
   H.assert_nil(map["issue-12"])
+end)
+
+H.section("自分関係の判定と先頭ソート")
+
+test("relevant_prs：作成 or レビュー依頼を自分関係とし先頭+番号降順に並べる", function()
+  local worktree = load_mod("worktree")
+  local list = {
+    { number = 10, author = "other", review_requests = {} },
+    { number = 11, author = "me", review_requests = {} }, -- 作成者
+    { number = 12, author = "other", review_requests = { "x", "me" } }, -- レビュー依頼
+    { number = 13, author = "other", review_requests = {} },
+  }
+  local out = worktree.relevant_prs(list, "me")
+
+  -- 自分関係(#12,#11)が先頭、各グループ内は番号降順
+  H.assert_eq(out[1].number, 12)
+  H.assert_true(out[1].mine)
+  H.assert_eq(out[2].number, 11)
+  H.assert_true(out[2].mine)
+  H.assert_eq(out[3].number, 13)
+  H.assert_false(out[3].mine)
+  H.assert_eq(out[4].number, 10)
+end)
+
+test("relevant_prs：me が nil なら誰も自分関係にならない(author nil との誤一致なし)", function()
+  local worktree = load_mod("worktree")
+  local list = { { number = 1, author = nil, review_requests = {} } }
+
+  local out = worktree.relevant_prs(list, nil)
+
+  H.assert_false(out[1].mine)
+end)
+
+test("relevant_issues：自分アサインを先頭+番号昇順に並べる", function()
+  local worktree = load_mod("worktree")
+  local list = {
+    { number = 5, assignees = { "other" } },
+    { number = 8, assignees = { "me" } },
+    { number = 3, assignees = {} },
+    { number = 7, assignees = { "a", "me" } },
+  }
+  local out = worktree.relevant_issues(list, "me")
+
+  -- 自分アサイン(#7,#8)が先頭、各グループ内は番号昇順
+  H.assert_eq(out[1].number, 7)
+  H.assert_true(out[1].mine)
+  H.assert_eq(out[2].number, 8)
+  H.assert_eq(out[3].number, 3)
+  H.assert_false(out[3].mine)
+  H.assert_eq(out[4].number, 5)
 end)
 
 H.section("Issue worktreeの作成")
