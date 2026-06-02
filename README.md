@@ -241,7 +241,7 @@ ai.apply(config, {
 
 ### 見た目のデフォルト
 
-見た目とタブバー設定 (Catppuccin Mocha / 透過 / ブラー / fancy タブバー等) は**常時・非破壊で適用**される。利用者が `config.X` を設定していればそちらが優先されるので、好みは `apply()` の前後どちらに書いても上書きできる (フォントは対象外)。
+見た目とタブバー設定 (Catppuccin Mocha / 透過 / ブラー / fancy タブバー等) は**常時・非破壊で適用**される。利用者が `config.X` を設定していればそちらが優先されるので、好みは `apply()` の前後どちらに書いても上書きできる。フォントは family 本体を強制しないが、`config.font` 未設定時のみ JetBrains Mono に OS 標準の和文フォントをフォールバックとして自動付加する (`config.font` を自分で設定すれば触らない)。
 
 ```lua
 config.color_scheme = "Tokyo Night"        -- 別の配色に置換

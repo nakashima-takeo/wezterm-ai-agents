@@ -239,7 +239,7 @@ See `default_opts` in `plugin/init.lua` for all options.
 
 ### Appearance defaults
 
-Appearance and tab-bar settings (Catppuccin Mocha / opacity / blur / fancy tab bar, etc.) are **always applied, non-destructively**. If you set `config.X` yourself it takes precedence, so you can override defaults whether you write them before or after `apply()` (font is excluded).
+Appearance and tab-bar settings (Catppuccin Mocha / opacity / blur / fancy tab bar, etc.) are **always applied, non-destructively**. If you set `config.X` yourself it takes precedence, so you can override defaults whether you write them before or after `apply()`. The font family itself is not dictated, but when `config.font` is unset, JetBrains Mono with the OS standard Japanese font as a fallback is applied automatically (left untouched if you set `config.font` yourself).
 
 ```lua
 config.color_scheme = "Tokyo Night"        -- use a different scheme
