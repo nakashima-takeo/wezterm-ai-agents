@@ -312,7 +312,7 @@ test("pull_requestsはconfig刻印でブランチ名非依存に紐づける", f
   wezterm.run_child_process = original
   os.remove(cache)
   H.assert_eq(map["renamed"].number, 12) -- 刻印で別名ブランチでも紐づく
-  H.assert_eq(map["feat/fork"].number, 12) -- headRefName 経路は維持
+  H.assert_nil(map["feat/fork"]) -- fork の headRefName は登録しない (同名ローカルブランチへの誤爆防止)
   H.assert_nil(map["pr-12"]) -- pr-N 名照合は廃止
 end)
 

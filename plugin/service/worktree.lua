@@ -415,7 +415,9 @@ function M.pull_requests(git_root)
   for _, pr in ipairs(M.pull_request_list(git_root)) do
     local rec = { number = pr.number, state = pr.state }
     by_number[pr.number] = rec
-    map[pr.headRefName] = rec
+    -- fork の headRefName は fork 側リポジトリのブランチ名で自リポと無関係。
+    -- 同名のローカルブランチ (例 main) に誤ってバッジが付くのを防ぐため同一リポ PR に限定する。
+    if not pr.fork then map[pr.headRefName] = rec end
   end
   for branch, number in pairs(M.pr_branch_config(git_root)) do
     if by_number[number] then map[branch] = by_number[number] end
