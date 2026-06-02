@@ -632,12 +632,31 @@ function M.worktree_selector(window, pane, deps)
   local base_ws = deps.worktree.base_workspace_name(window)
   local worktrees = deps.worktree.list(git_root)
   local prs = deps.worktree.pull_requests(git_root)
+  local issue_map = deps.worktree.issues(git_root)
 
   local function pr_marker(branch)
     local pr = prs[branch]
     if not pr then return nil end
     local color = pr.state == "MERGED" and "Purple" or (pr.state == "CLOSED" and "Maroon" or "Green")
     return { { Foreground = { AnsiColor = color } }, { Text = " \xEF\x90\x87 #" .. tostring(pr.number) }, "ResetAttributes" }
+  end
+
+  -- linkedBranches 由来の Issue バッジ。命名規約に依存せず、他人が作ったリンクも表示する。
+  local function issue_marker(branch)
+    local n = issue_map[branch]
+    if not n then return nil end
+    return { { Foreground = { AnsiColor = "Fuchsia" } }, { Text = " \xEF\x90\x92 #" .. tostring(n) }, "ResetAttributes" }
+  end
+
+  -- fmt 配列に PR / Issue バッジを連結する。nil マーカーは飛ばす。
+  local function append_markers(fmt, branch)
+    for _, m in ipairs({ pr_marker(branch) or false, issue_marker(branch) or false }) do
+      if m then
+        for _, x in ipairs(m) do
+          table.insert(fmt, x)
+        end
+      end
+    end
   end
 
   local choices = {}
@@ -664,12 +683,7 @@ function M.worktree_selector(window, pane, deps)
       table.insert(fmt, { Text = "\xEE\x9C\xA5 " })
       table.insert(fmt, "ResetAttributes")
       table.insert(fmt, { Text = wt.branch })
-      local marker = pr_marker(wt.branch)
-      if marker then
-        for _, x in ipairs(marker) do
-          table.insert(fmt, x)
-        end
-      end
+      append_markers(fmt, wt.branch)
       table.insert(choices, {
         id = "switch:" .. wt.path .. ":" .. wt.branch .. ":" .. tostring(is_main),
         label = wezterm.format(fmt),
@@ -678,12 +692,9 @@ function M.worktree_selector(window, pane, deps)
   end
 
   local function branch_label(text, branch)
-    local marker = pr_marker(branch)
-    if not marker then return "  " .. text end
+    if not pr_marker(branch) and not issue_marker(branch) then return "  " .. text end
     local fmt = { { Text = "  " .. text } }
-    for _, x in ipairs(marker) do
-      table.insert(fmt, x)
-    end
+    append_markers(fmt, branch)
     return wezterm.format(fmt)
   end
 
@@ -729,8 +740,7 @@ function M.worktree_selector(window, pane, deps)
     end
   end
 
-  -- issue-<N> ブランチが既にある Issue は worktree/branch 側に出ているので一覧から除外する。
-  local issue_list = deps.worktree.issue_list(git_root)
+  -- リンク済みブランチがローカルに到達可能な Issue は worktree/branch 側に出ているので除外する。
   local me = deps.worktree.current_user()
   local function assigned_to_me(issue)
     if not me then return false end
@@ -739,12 +749,9 @@ function M.worktree_selector(window, pane, deps)
     end
     return false
   end
-  local issues = {}
-  for _, issue in ipairs(issue_list) do
-    if not reachable["issue-" .. tostring(issue.number)] then
-      issue.mine = assigned_to_me(issue)
-      table.insert(issues, issue)
-    end
+  local issues = deps.worktree.uncovered_issues(deps.worktree.issue_list(git_root), reachable)
+  for _, issue in ipairs(issues) do
+    issue.mine = assigned_to_me(issue)
   end
   -- 自分アサインを先頭に寄せる (安定ソート: 番号昇順を保つ)。
   table.sort(issues, function(a, b)

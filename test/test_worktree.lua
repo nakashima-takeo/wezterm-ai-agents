@@ -413,14 +413,17 @@ end)
 
 H.section("Issueリストのパース")
 
-test("parse_issue_listはnumber/title/assigneesのloginを正規化する", function()
+local function issue_graphql(nodes_json) return '{"data":{"repository":{"issues":{"nodes":' .. nodes_json .. "}}}}" end
+
+test("parse_issue_listはGraphQLからnumber/title/assignees/linkedBranchesを正規化する", function()
   local worktree = load_mod("worktree")
-  local raw = [[
+  local raw = issue_graphql([[
     [
-      {"number":5,"title":"バグ修正","assignees":[{"login":"alice"},{"login":"bob"}]},
-      {"number":3,"title":"機能追加","assignees":[]}
+      {"number":5,"title":"バグ修正","assignees":{"nodes":[{"login":"alice"},{"login":"bob"}]},
+       "linkedBranches":{"nodes":[{"ref":{"name":"fix/login"}}]}},
+      {"number":3,"title":"機能追加","assignees":{"nodes":[]},"linkedBranches":{"nodes":[]}}
     ]
-  ]]
+  ]])
   local list = worktree.parse_issue_list(raw)
 
   H.assert_eq(#list, 2)
@@ -428,7 +431,9 @@ test("parse_issue_listはnumber/title/assigneesのloginを正規化する", func
   H.assert_eq(list[1].title, "バグ修正")
   H.assert_eq(list[1].assignees[1], "alice")
   H.assert_eq(list[1].assignees[2], "bob")
+  H.assert_eq(list[1].linked_branches[1], "fix/login")
   H.assert_eq(#list[2].assignees, 0)
+  H.assert_eq(#list[2].linked_branches, 0)
 end)
 
 test("parse_issue_listは空・不正入力で空配列を返す", function()
@@ -437,6 +442,56 @@ test("parse_issue_listは空・不正入力で空配列を返す", function()
   H.assert_eq(#worktree.parse_issue_list(""), 0)
   H.assert_eq(#worktree.parse_issue_list(nil), 0)
   H.assert_eq(#worktree.parse_issue_list("not json"), 0)
+  H.assert_eq(#worktree.parse_issue_list("[]"), 0) -- GraphQL構造でない配列も空扱い
+end)
+
+H.section("到達不能Issueの抽出")
+
+test("uncovered_issues：linkedBranchが到達可能ならリネーム済みでも除外する", function()
+  local worktree = load_mod("worktree")
+  local list = {
+    { number = 5, title = "a", linked_branches = { "renamed-feature" } }, -- issue-5 でなくても刻印で除外
+    { number = 3, title = "b", linked_branches = {} }, -- 未着手
+  }
+  local reachable = { ["renamed-feature"] = true }
+
+  local out = worktree.uncovered_issues(list, reachable)
+
+  H.assert_eq(#out, 1)
+  H.assert_eq(out[1].number, 3)
+end)
+
+test("uncovered_issues：issue-N命名のフォールバックでも除外する", function()
+  local worktree = load_mod("worktree")
+  local list = { { number = 7, title = "a", linked_branches = {} } }
+
+  -- キャッシュ未更新で linkedBranches が空でも、ローカルの issue-7 で消える
+  H.assert_eq(#worktree.uncovered_issues(list, { ["issue-7"] = true }), 0)
+end)
+
+test("uncovered_issues：到達不能なリンクは一覧に残す", function()
+  local worktree = load_mod("worktree")
+  local list = { { number = 9, title = "a", linked_branches = { "someones-branch" } } }
+
+  H.assert_eq(#worktree.uncovered_issues(list, {}), 1)
+end)
+
+test("issues：linkedBranchesを反転してbranch→番号マップを返す", function()
+  local worktree = load_mod("worktree")
+  local git_root = "/tmp/__wt_issue_map_test"
+  local dir = (os.getenv("XDG_STATE_HOME") or (wezterm.home_dir .. "/.local/state")) .. "/wezterm-ai-agents"
+  os.execute("mkdir -p '" .. dir .. "'")
+  local cache = dir .. "/wezterm-issue-" .. git_root:gsub("[^%w]", "_") .. ".json"
+  H.write_file(
+    cache,
+    issue_graphql('[{"number":12,"title":"x","assignees":{"nodes":[]},"linkedBranches":{"nodes":[{"ref":{"name":"my-fix"}}]}}]')
+  )
+
+  local map = worktree.issues(git_root)
+
+  os.remove(cache)
+  H.assert_eq(map["my-fix"], 12) -- 任意名ブランチでも Issue 番号を逆引きできる
+  H.assert_nil(map["issue-12"])
 end)
 
 H.section("Issue worktreeの作成")

@@ -176,7 +176,17 @@ local function issue_cache_file(git_root) return cache_base() .. "/wezterm-issue
 local function gh_user_cache_file() return cache_base() .. "/wezterm-gh-user" end
 
 local GH_PR_LIST = "gh pr list --json number,headRefName,state,isCrossRepository,headRepositoryOwner --limit 200"
-local GH_ISSUE_LIST = "gh issue list --json number,title,assignees --limit 200"
+
+-- Issue は linkedBranches (GitHub 公式の Issue↔ブランチリンク) ごと GraphQL で引く。
+-- これを反転して「ブランチ→Issue番号」マップを作れば、命名規約に依存せずリネーム済みや
+-- 他人が作ったリンクも認識できる (PR の branch.<name>.merge 刻印に相当する真実のソース)。
+local GH_ISSUE_QUERY = "query($owner:String!,$name:String!){repository(owner:$owner,name:$name){"
+  .. "issues(first:100,states:OPEN,orderBy:{field:UPDATED_AT,direction:DESC}){nodes{"
+  .. "number title assignees(first:10){nodes{login}} linkedBranches(first:10){nodes{ref{name}}}}}}}"
+local GH_ISSUE_LIST = 'gh api graphql -F owner="$(gh repo view --json owner --jq .owner.login)" '
+  .. '-F name="$(gh repo view --json name --jq .name)" -f query=\''
+  .. GH_ISSUE_QUERY
+  .. "'"
 
 -- gh の一覧取得をキャッシュファイルへアトミックに書き出すシェルコマンドを組み立てる。
 -- 書き込み先 base を mkdir -p で保証する。io.open 経路と違いシェルの `> リダイレクト` 生成なので、
@@ -254,21 +264,32 @@ end
 -- キャッシュから open PR の配列を返す。
 function M.pull_request_list(git_root) return M.parse_pr_list(read_file(pr_cache_file(git_root))) end
 
--- 生 JSON を [{ number, title, assignees = {login,...} }] に変換する純関数。
+-- GraphQL 生 JSON を [{ number, title, assignees={login,...}, linked_branches={name,...} }] に変換する純関数。
 function M.parse_issue_list(raw)
   if not raw or raw == "" then return {} end
   local ok, data = pcall(wezterm.json_parse, raw)
   if not ok or type(data) ~= "table" then return {} end
+  local repo = data.data and data.data.repository
+  local nodes = repo and repo.issues and repo.issues.nodes
+  if type(nodes) ~= "table" then return {} end
   local list = {}
-  for _, issue in ipairs(data) do
+  for _, issue in ipairs(nodes) do
     if issue.number and issue.title then
       local assignees = {}
-      if type(issue.assignees) == "table" then
-        for _, a in ipairs(issue.assignees) do
+      local an = type(issue.assignees) == "table" and issue.assignees.nodes
+      if type(an) == "table" then
+        for _, a in ipairs(an) do
           if type(a) == "table" and a.login then table.insert(assignees, a.login) end
         end
       end
-      table.insert(list, { number = issue.number, title = issue.title, assignees = assignees })
+      local branches = {}
+      local ln = type(issue.linkedBranches) == "table" and issue.linkedBranches.nodes
+      if type(ln) == "table" then
+        for _, b in ipairs(ln) do
+          if type(b) == "table" and type(b.ref) == "table" and b.ref.name then table.insert(branches, b.ref.name) end
+        end
+      end
+      table.insert(list, { number = issue.number, title = issue.title, assignees = assignees, linked_branches = branches })
     end
   end
   return list
@@ -276,6 +297,39 @@ end
 
 -- キャッシュから open Issue の配列を返す。
 function M.issue_list(git_root) return M.parse_issue_list(read_file(issue_cache_file(git_root))) end
+
+-- linkedBranches を反転した { [branch] = number } マップを返す。worktree/branch のバッジ表示用。
+function M.issues(git_root)
+  local map = {}
+  for _, issue in ipairs(M.issue_list(git_root)) do
+    for _, name in ipairs(issue.linked_branches or {}) do
+      map[name] = issue.number
+    end
+  end
+  return map
+end
+
+-- リンク済みブランチがローカルに到達可能な Issue を除外する純関数。
+-- reachable: 画面に出ているブランチ名集合 (worktree/local/remote)。
+-- 主軸は GitHub の linkedBranches (リネーム・他人作成に追従)。issue-<N> 命名は
+-- gh issue develop 直後でキャッシュ未更新でも消えるようにするフォールバック。
+function M.uncovered_issues(issue_list, reachable)
+  reachable = reachable or {}
+  local out = {}
+  for _, issue in ipairs(issue_list) do
+    local covered = reachable["issue-" .. tostring(issue.number)] and true or false
+    if not covered then
+      for _, name in ipairs(issue.linked_branches or {}) do
+        if reachable[name] then
+          covered = true
+          break
+        end
+      end
+    end
+    if not covered then table.insert(out, issue) end
+  end
+  return out
+end
 
 -- 自分の login を返す (assignee 強調用)。未取得なら nil。
 function M.current_user()
