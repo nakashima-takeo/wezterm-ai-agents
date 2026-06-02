@@ -170,39 +170,58 @@ end
 
 local function pr_cache_file(git_root) return cache_base() .. "/wezterm-pr-" .. git_root:gsub("[^%w]", "_") .. ".json" end
 
-local GH_PR_LIST = "gh pr list --json number,headRefName,state,isCrossRepository,headRepositoryOwner --limit 200"
+local function issue_cache_file(git_root) return cache_base() .. "/wezterm-issue-" .. git_root:gsub("[^%w]", "_") .. ".json" end
 
--- ワークスペース切替時に呼ぶ。git fetch と gh pr list を裏で並列実行 (UI 非ブロッキング)。
--- gh の結果はキャッシュファイルへ書き出し、worktree 画面はそれを読むだけにする。
-function M.prefetch(git_root)
-  wezterm.background_child_process({ "git", "-C", git_root, "fetch", "--prune" })
-  local cache = pr_cache_file(git_root)
+-- 自分の login キャッシュ。Issue の assignee 強調用 (リポジトリ非依存なので 1 ファイルに集約)。
+local function gh_user_cache_file() return cache_base() .. "/wezterm-gh-user" end
+
+local GH_PR_LIST = "gh pr list --json number,headRefName,state,isCrossRepository,headRepositoryOwner --limit 200"
+local GH_ISSUE_LIST = "gh issue list --json number,title,assignees --limit 200"
+
+-- gh の一覧取得をキャッシュファイルへアトミックに書き出すシェルコマンドを組み立てる。
+-- 書き込み先 base を mkdir -p で保証する。io.open 経路と違いシェルの `> リダイレクト` 生成なので、
+-- base 不在だとリダイレクトの時点で失敗する。前置しないと初回ワークスペース切替でキャッシュが作られない。
+local function bg_cache_cmd(git_root, list_cmd, cache)
   local tmp = shq(cache .. ".tmp")
-  -- 書き込み先 base を mkdir -p で保証する。io.open 経路と違いシェルの `> リダイレクト` 生成なので、
-  -- base 不在だとリダイレクトの時点で失敗する。前置しないと初回ワークスペース切替でキャッシュが作られない。
-  local cmd = ("mkdir -p %s && cd %s && %s > %s 2>/dev/null && mv %s %s"):format(
+  return ("mkdir -p %s && cd %s && %s > %s 2>/dev/null && mv %s %s"):format(
     shq(cache_base()),
     shq(git_root),
-    GH_PR_LIST,
+    list_cmd,
     tmp,
     tmp,
     shq(cache)
   )
-  wezterm.background_child_process({ "/bin/sh", "-lc", cmd })
 end
 
--- 手動 fetch 用。gh を同期実行してキャッシュを即時更新する。
-function M.refresh_pr_cache(git_root)
-  local ok, stdout = wezterm.run_child_process({ "/bin/sh", "-lc", "cd " .. shq(git_root) .. " && " .. GH_PR_LIST .. " 2>/dev/null" })
+-- ワークスペース切替時に呼ぶ。git fetch と gh pr/issue list を裏で並列実行 (UI 非ブロッキング)。
+-- gh の結果はキャッシュファイルへ書き出し、worktree 画面はそれを読むだけにする。
+function M.prefetch(git_root)
+  wezterm.background_child_process({ "git", "-C", git_root, "fetch", "--prune" })
+  wezterm.background_child_process({ "/bin/sh", "-lc", bg_cache_cmd(git_root, GH_PR_LIST, pr_cache_file(git_root)) })
+  wezterm.background_child_process({ "/bin/sh", "-lc", bg_cache_cmd(git_root, GH_ISSUE_LIST, issue_cache_file(git_root)) })
+  -- 自分の login (assignee 強調用、無ければ取得)。
+  local login = shq(gh_user_cache_file())
+  local user_cmd = ("mkdir -p %s && { test -s %s || gh api user --jq .login > %s 2>/dev/null; }"):format(shq(cache_base()), login, login)
+  wezterm.background_child_process({ "/bin/sh", "-lc", user_cmd })
+end
+
+-- 手動 fetch 用にキャッシュを即時更新する共通処理。gh を同期実行して書き出す。
+local function refresh_cache(git_root, list_cmd, cache)
+  local ok, stdout = wezterm.run_child_process({ "/bin/sh", "-lc", "cd " .. shq(git_root) .. " && " .. list_cmd .. " 2>/dev/null" })
   if ok and stdout and stdout ~= "" then
     pcall(wezterm.run_child_process, { "mkdir", "-p", cache_base() })
-    local f = io.open(pr_cache_file(git_root), "w")
+    local f = io.open(cache, "w")
     if f then
       f:write(stdout)
       f:close()
     end
   end
 end
+
+-- 手動 fetch 用。gh を同期実行してキャッシュを即時更新する。
+function M.refresh_pr_cache(git_root) refresh_cache(git_root, GH_PR_LIST, pr_cache_file(git_root)) end
+
+function M.refresh_issue_cache(git_root) refresh_cache(git_root, GH_ISSUE_LIST, issue_cache_file(git_root)) end
 
 -- 生 JSON を正規化した配列 [{ number, headRefName, state, fork, owner }] に変換する純関数。
 function M.parse_pr_list(raw)
@@ -224,8 +243,8 @@ function M.parse_pr_list(raw)
   return list
 end
 
-local function read_pr_cache(git_root)
-  local f = io.open(pr_cache_file(git_root), "r")
+local function read_file(path)
+  local f = io.open(path, "r")
   if not f then return "" end
   local raw = f:read("*a")
   f:close()
@@ -233,7 +252,37 @@ local function read_pr_cache(git_root)
 end
 
 -- キャッシュから open PR の配列を返す。
-function M.pull_request_list(git_root) return M.parse_pr_list(read_pr_cache(git_root)) end
+function M.pull_request_list(git_root) return M.parse_pr_list(read_file(pr_cache_file(git_root))) end
+
+-- 生 JSON を [{ number, title, assignees = {login,...} }] に変換する純関数。
+function M.parse_issue_list(raw)
+  if not raw or raw == "" then return {} end
+  local ok, data = pcall(wezterm.json_parse, raw)
+  if not ok or type(data) ~= "table" then return {} end
+  local list = {}
+  for _, issue in ipairs(data) do
+    if issue.number and issue.title then
+      local assignees = {}
+      if type(issue.assignees) == "table" then
+        for _, a in ipairs(issue.assignees) do
+          if type(a) == "table" and a.login then table.insert(assignees, a.login) end
+        end
+      end
+      table.insert(list, { number = issue.number, title = issue.title, assignees = assignees })
+    end
+  end
+  return list
+end
+
+-- キャッシュから open Issue の配列を返す。
+function M.issue_list(git_root) return M.parse_issue_list(read_file(issue_cache_file(git_root))) end
+
+-- 自分の login を返す (assignee 強調用)。未取得なら nil。
+function M.current_user()
+  local login = read_file(gh_user_cache_file()):gsub("%s+$", "")
+  if login == "" then return nil end
+  return login
+end
 
 -- git config の branch.<name>.merge=refs/pull/<N>/head 刻印を { [branch] = number } で返す。
 -- gh pr checkout / add_pr_worktree が刻んだ印を読み、ブランチ名に依存せず PR を逆引きする。
@@ -305,9 +354,33 @@ function M.add_pr_worktree(git_root, number, opts)
   return ok2, wt_path, stderr2
 end
 
+-- Issue から issue-<N> ブランチを生やして worktree を作る。
+-- gh issue develop で origin にブランチを作成し Issue に開発ブランチとしてリンクを刻む
+-- (= その branch から出した PR が Issue に自動で紐づき、マージで Issue が自動クローズされる)。
+-- リモートに作られるため fetch してから worktree add する 2 段構え。
+function M.add_issue_worktree(git_root, number, opts)
+  local branch = "issue-" .. tostring(number)
+  local cmd = ("cd %s && gh issue develop %d --name %s"):format(shq(git_root), number, shq(branch))
+  local ok, _, stderr = wezterm.run_child_process({ "/bin/sh", "-lc", cmd })
+  if not ok then return false, nil, stderr end
+  local ok_f, _, stderr_f = wezterm.run_child_process({ "git", "-C", git_root, "fetch", "origin", branch })
+  if not ok_f then return false, nil, stderr_f end
+  local template = (opts and opts.worktree and opts.worktree.path) or "sibling"
+  local wt_path = M.resolve_path(template, git_root, branch)
+  local ok2, _, stderr2 =
+    wezterm.run_child_process({ "git", "-C", git_root, "worktree", "add", "--track", "-b", branch, wt_path, "origin/" .. branch })
+  return ok2, wt_path, stderr2
+end
+
 -- PR をブラウザで開く (fire-and-forget)。
 function M.open_pr_web(git_root, number)
   local cmd = ("cd %s && gh pr view --web %d"):format(shq(git_root), number)
+  wezterm.background_child_process({ "/bin/sh", "-lc", cmd })
+end
+
+-- Issue をブラウザで開く (fire-and-forget)。
+function M.open_issue_web(git_root, number)
+  local cmd = ("cd %s && gh issue view --web %d"):format(shq(git_root), number)
   wezterm.background_child_process({ "/bin/sh", "-lc", cmd })
 end
 

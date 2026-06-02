@@ -479,6 +479,21 @@ local function create_pr_worktree(window, git_root, number, deps)
   return wt_path
 end
 
+local function create_issue_worktree(window, git_root, number, deps)
+  local L = deps.opts.labels
+  local branch = "issue-" .. tostring(number)
+  local ok, wt_path, stderr = deps.worktree.add_issue_worktree(git_root, number, deps.opts)
+  if not ok then
+    local err = stderr and stderr:gsub("%s+$", "") or ""
+    local m = string.format(L.wt_create_failed, branch)
+    if err ~= "" then m = m .. "\n" .. err end
+    toast(window, m, 5000)
+    return nil
+  end
+  toast(window, string.format(L.wt_created, branch))
+  return wt_path
+end
+
 local function open_agent_tab_in_cwd(window, pane, cwd, agent_impl, deps)
   local opts = deps.opts
   deps.layout.add_tab(window, agent_impl and agent_impl.id or nil, deps.workspace, opts)
@@ -512,6 +527,7 @@ local function show_worktree_action_menu(window, pane, wt_path, branch, is_main,
     if not is_main and not in_wt then table.insert(manage, { id = "delete", label = L.delete_wt }) end
   end
   if pr then table.insert(manage, { id = "open_pr", label = L.open_pr }) end
+  if pending and pending.issue_number then table.insert(manage, { id = "open_issue", label = L.open_issue }) end
   if #manage > 0 then
     table.insert(choices, { id = "_sep_other", label = "── Manage ──" })
     for _, c in ipairs(manage) do
@@ -530,9 +546,15 @@ local function show_worktree_action_menu(window, pane, wt_path, branch, is_main,
           deps.worktree.open_pr_web(git_root, pr.number)
           return
         end
+        if id == "open_issue" then
+          deps.worktree.open_issue_web(git_root, pending.issue_number)
+          return
+        end
         if pending then
           if pending.pr_number then
             wt_path = create_pr_worktree(iw, git_root, pending.pr_number, deps)
+          elseif pending.issue_number then
+            wt_path = create_issue_worktree(iw, git_root, pending.issue_number, deps)
           else
             wt_path = create_worktree(iw, git_root, pending.branch, pending.is_new, pending.local_name, deps)
           end
@@ -707,6 +729,40 @@ function M.worktree_selector(window, pane, deps)
     end
   end
 
+  -- issue-<N> ブランチが既にある Issue は worktree/branch 側に出ているので一覧から除外する。
+  local issue_list = deps.worktree.issue_list(git_root)
+  local me = deps.worktree.current_user()
+  local function assigned_to_me(issue)
+    if not me then return false end
+    for _, login in ipairs(issue.assignees) do
+      if login == me then return true end
+    end
+    return false
+  end
+  local issues = {}
+  for _, issue in ipairs(issue_list) do
+    if not reachable["issue-" .. tostring(issue.number)] then
+      issue.mine = assigned_to_me(issue)
+      table.insert(issues, issue)
+    end
+  end
+  -- 自分アサインを先頭に寄せる (安定ソート: 番号昇順を保つ)。
+  table.sort(issues, function(a, b)
+    if a.mine ~= b.mine then return a.mine end
+    return a.number < b.number
+  end)
+  if #issues > 0 then
+    table.insert(choices, { id = "_sep_issue", label = "── Issues ──" })
+    for _, issue in ipairs(issues) do
+      local fmt = { { Foreground = { AnsiColor = issue.mine and "Yellow" or "Olive" } } }
+      if issue.mine then table.insert(fmt, { Attribute = { Intensity = "Bold" } }) end
+      table.insert(fmt, { Text = "\xEF\x90\x92 #" .. tostring(issue.number) .. " " })
+      table.insert(fmt, "ResetAttributes")
+      table.insert(fmt, { Text = issue.title })
+      table.insert(choices, { id = "issue:" .. tostring(issue.number), label = wezterm.format(fmt) })
+    end
+  end
+
   window:perform_action(
     act.InputSelector({
       title = "Worktree",
@@ -752,9 +808,29 @@ function M.worktree_selector(window, pane, deps)
           return
         end
 
+        local issue_num = id:match("^issue:(%d+)$")
+        if issue_num then
+          local n = tonumber(issue_num)
+          local issue_branch = "issue-" .. tostring(n)
+          show_worktree_action_menu(
+            iw,
+            ip,
+            nil,
+            issue_branch,
+            false,
+            base_ws,
+            git_root,
+            cwd_path,
+            deps,
+            { branch = issue_branch, issue_number = n }
+          )
+          return
+        end
+
         if id == "fetch_remote" then
           local ok = deps.worktree.fetch(git_root)
           deps.worktree.refresh_pr_cache(git_root)
+          deps.worktree.refresh_issue_cache(git_root)
           toast(iw, ok and L.fetch_done or L.fetch_failed)
           M.worktree_selector(iw, ip, deps)
           return

@@ -411,4 +411,91 @@ test("open_pr_web：gh pr view --web をログインシェルで投げる", func
   H.assert_match(captured[3], "/home/user/repo")
 end)
 
+H.section("Issueリストのパース")
+
+test("parse_issue_listはnumber/title/assigneesのloginを正規化する", function()
+  local worktree = load_mod("worktree")
+  local raw = [[
+    [
+      {"number":5,"title":"バグ修正","assignees":[{"login":"alice"},{"login":"bob"}]},
+      {"number":3,"title":"機能追加","assignees":[]}
+    ]
+  ]]
+  local list = worktree.parse_issue_list(raw)
+
+  H.assert_eq(#list, 2)
+  H.assert_eq(list[1].number, 5)
+  H.assert_eq(list[1].title, "バグ修正")
+  H.assert_eq(list[1].assignees[1], "alice")
+  H.assert_eq(list[1].assignees[2], "bob")
+  H.assert_eq(#list[2].assignees, 0)
+end)
+
+test("parse_issue_listは空・不正入力で空配列を返す", function()
+  local worktree = load_mod("worktree")
+
+  H.assert_eq(#worktree.parse_issue_list(""), 0)
+  H.assert_eq(#worktree.parse_issue_list(nil), 0)
+  H.assert_eq(#worktree.parse_issue_list("not json"), 0)
+end)
+
+H.section("Issue worktreeの作成")
+
+test("add_issue_worktree：gh issue develop→fetch→worktree addの順で実行する", function()
+  local worktree = load_mod("worktree")
+  local calls = {}
+  local original = wezterm.run_child_process
+  wezterm.run_child_process = function(args)
+    table.insert(calls, args)
+    return true, "", ""
+  end
+
+  local ok, wt_path = worktree.add_issue_worktree("/home/user/repo", 7, {})
+
+  wezterm.run_child_process = original
+  H.assert_true(ok)
+  H.assert_eq(wt_path, "/home/user/repo__worktrees/issue-7")
+  H.assert_eq(#calls, 3)
+  -- 1: gh issue develop (sh -lc 経由)
+  H.assert_eq(calls[1][1], "/bin/sh")
+  H.assert_match(calls[1][3], "gh issue develop 7")
+  H.assert_match(calls[1][3], "issue%-7")
+  -- 2: fetch origin issue-7
+  H.assert_eq(calls[2][#calls[2] - 2], "fetch")
+  H.assert_eq(calls[2][#calls[2] - 1], "origin")
+  H.assert_eq(calls[2][#calls[2]], "issue-7")
+  -- 3: worktree add --track -b issue-7 <path> origin/issue-7
+  H.assert_eq(calls[3][#calls[3] - 1], "/home/user/repo__worktrees/issue-7")
+  H.assert_eq(calls[3][#calls[3]], "origin/issue-7")
+end)
+
+test("add_issue_worktree：gh issue develop失敗時はfetchもworktree addもしない", function()
+  local worktree = load_mod("worktree")
+  local calls = {}
+  local original = wezterm.run_child_process
+  wezterm.run_child_process = function(args)
+    table.insert(calls, args)
+    return false, "", "no permission"
+  end
+
+  local ok = worktree.add_issue_worktree("/home/user/repo", 7, {})
+
+  wezterm.run_child_process = original
+  H.assert_false(ok)
+  H.assert_eq(#calls, 1)
+end)
+
+test("open_issue_web：gh issue view --web をログインシェルで投げる", function()
+  local worktree = load_mod("worktree")
+  local captured
+  local original = wezterm.background_child_process
+  wezterm.background_child_process = function(args) captured = args end
+
+  worktree.open_issue_web("/home/user/repo", 7)
+
+  wezterm.background_child_process = original
+  H.assert_match(captured[3], "gh issue view %-%-web 7")
+  H.assert_match(captured[3], "/home/user/repo")
+end)
+
 H.finish()
