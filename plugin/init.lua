@@ -33,20 +33,31 @@ local workspace, worktree, layout, selector, agent, ui, builtin_labels, builtin_
 
 local all_agent_ids = { "claude", "cursor", "codex", "gemini" }
 
+-- モジュールを層順 (下位→上位) にロードする。配置と並びがそのまま依存階層を表す。
+-- 下位は UI を知らず、上位 (selector/ui) が deps 経由で下位を呼ぶ。循環は引数注入で回避済み。
 local function load_modules(plugin_dir, enabled_agents)
   local function load(rel) return dofile(plugin_dir .. "/plugin/" .. rel .. ".lua") end
-  workspace = load("workspace/init")
-  workspace.setup(load("workspace/session"))
-  worktree = load("worktree")
-  layout = load("layout")
-  selector = load("selector/init")
-  selector.setup(load("selector/workspace"), load("selector/worktree"), load("selector/ui"))
-  agent = load("agent")
-  ui = load("ui")
-  editor = load("editor")
-  links = load("links")
+
+  -- 下位層: データ (他に依存しない)
   builtin_labels = load("labels")
   builtin_icons = load("icons")
+
+  -- 下位層: I/O・外部コマンド (UI に依存しない)
+  agent = load("agent")
+  worktree = load("worktree")
+  editor = load("editor")
+  links = load("links")
+
+  -- 中位層: 永続化・レイアウト (agent/layout を引数注入し循環回避)
+  workspace = load("workspace/init")
+  workspace.setup(load("workspace/session"))
+  layout = load("layout")
+
+  -- 上位層: UI・オーケストレーション (deps 経由で下位/中位を呼ぶ)
+  ui = load("ui")
+  selector = load("selector/init")
+  selector.setup(load("selector/workspace"), load("selector/worktree"), load("selector/ui"))
+
   for _, id in ipairs(enabled_agents or all_agent_ids) do
     local found = false
     for _, valid in ipairs(all_agent_ids) do
