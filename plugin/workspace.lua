@@ -131,7 +131,8 @@ end
 
 -- ============== Snapshot / Sync ==============
 
-local function cwd_of(pane)
+-- pane の cwd をパス文字列で返す。selector / links と共有する単一の実装。
+function M.get_cwd_path(pane)
   local cwd = pane:get_current_working_dir()
   if not cwd then return nil end
   return cwd.file_path or tostring(cwd):gsub("^file://[^/]*", "")
@@ -151,7 +152,7 @@ function M.snapshot_tabs(window, agent_mod, layout_mod, plugin_opts)
     end
     local cwd_pane = pane or tab:active_pane()
     if cwd_pane then
-      local pcwd = cwd_of(cwd_pane)
+      local pcwd = M.get_cwd_path(cwd_pane)
       if pcwd then entry.cwd = pcwd end
     end
     local lay = layout_mod and layout_mod.snapshot(tab) or nil
