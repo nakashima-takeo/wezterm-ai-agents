@@ -761,11 +761,16 @@ function M.worktree_selector(window, pane, deps)
   if #issues > 0 then
     table.insert(choices, { id = "_sep_issue", label = "── Issues ──" })
     for _, issue in ipairs(issues) do
-      local fmt = { { Foreground = { AnsiColor = issue.mine and "Yellow" or "Olive" } } }
-      if issue.mine then table.insert(fmt, { Attribute = { Intensity = "Bold" } }) end
-      table.insert(fmt, { Text = "\xEF\x90\x92 #" .. tostring(issue.number) .. " " })
-      table.insert(fmt, "ResetAttributes")
-      table.insert(fmt, { Text = issue.title })
+      -- 自分アサインは人アイコン+明るい黄+太字で行全体を強調。非アサインは通常色のまま据え置く。
+      local fmt = {}
+      if issue.mine then
+        table.insert(fmt, { Foreground = { AnsiColor = "Yellow" } })
+        table.insert(fmt, { Attribute = { Intensity = "Bold" } })
+        table.insert(fmt, { Text = "\xEF\x80\x87 #" .. tostring(issue.number) .. " " .. issue.title })
+        table.insert(fmt, "ResetAttributes")
+      else
+        table.insert(fmt, { Text = "\xEF\x90\x92 #" .. tostring(issue.number) .. " " .. issue.title })
+      end
       table.insert(choices, { id = "issue:" .. tostring(issue.number), label = wezterm.format(fmt) })
     end
   end
