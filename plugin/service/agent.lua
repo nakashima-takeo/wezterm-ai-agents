@@ -6,7 +6,7 @@
 --   colors        : { working, waiting, done, idle [, error] }
 --   spawn_args(opts, session_id, cwd) -> table  -- args for wezterm spawn
 --   default_opts  : table merged under opts.agents[id]
--- icons is injected by init.lua from plugin/icons.lua (unicode or nerd font).
+-- icons is injected by init.lua from resource/icons.lua (unicode or nerd font).
 --
 -- Optional (injected by register() if not provided):
 --   default_state : fallback state when file is absent (default "idle")

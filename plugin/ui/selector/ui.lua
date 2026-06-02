@@ -1,6 +1,6 @@
 -- Shared formatting/UI helpers for the selector sub-modules.
--- Pure presentation given `deps`; injected into selector/workspace.lua and
--- selector/worktree.lua via their setup() so both share one implementation.
+-- Pure presentation given `deps`; injected into ui/selector/workspace.lua and
+-- ui/selector/worktree.lua via their setup() so both share one implementation.
 
 local wezterm = require("wezterm")
 local act = wezterm.action

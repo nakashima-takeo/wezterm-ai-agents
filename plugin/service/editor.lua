@@ -1,5 +1,5 @@
 -- GUI editor detection and launch-argument construction.
--- Shared by selector.lua (open a folder) and links.lua (open a file at line:col).
+-- Shared by ui/selector (open a folder) and service/links.lua (open a file at line:col).
 
 local wezterm = require("wezterm")
 

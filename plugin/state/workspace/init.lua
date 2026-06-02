@@ -5,7 +5,7 @@
 -- JSON schema (per workspace):
 --   { name, cwd, lastUsed, tabs = [{ agent = "claude" | nil, session_id, cwd, layout }, ...] }
 --
--- The "agent" field is the agent id (see plugin/agents/*.lua).
+-- The "agent" field is the agent id (see service/agents/*.lua).
 -- Legacy fields {claude=true, sessionId=...} are read transparently for migration.
 
 local wezterm = require("wezterm")

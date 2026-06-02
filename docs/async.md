@@ -21,7 +21,7 @@ WezTerm の Lua は **Lua 5.4**。Promise / async-await は無い。イベント
 
 ## 重い処理はキャッシュで回避する
 
-`update-status` 等の高頻度イベントで毎回外部コマンドを叩かない。本プラグインの実装パターン（`worktree.lua` の `prefetch`）:
+`update-status` 等の高頻度イベントで毎回外部コマンドを叩かない。本プラグインの実装パターン（`service/worktree/github.lua` の `prefetch`）:
 
 ```lua
 -- 切替時に背景で fetch / gh を実行し、結果をキャッシュファイルへ
