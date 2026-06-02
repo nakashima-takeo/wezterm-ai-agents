@@ -6,7 +6,7 @@
 --   colors        : { working, waiting, done, idle [, error] }
 --   spawn_args(opts, session_id, cwd) -> table  -- args for wezterm spawn
 --   default_opts  : table merged under opts.agents[id]
--- icons is injected by init.lua from plugin/icons.lua (unicode or nerd font).
+-- icons is injected by init.lua from resource/icons.lua (unicode or nerd font).
 --
 -- Optional (injected by register() if not provided):
 --   default_state : fallback state when file is absent (default "idle")
@@ -280,16 +280,15 @@ end
 
 function M.all_workspaces(plugin_opts)
   local result = {}
+  local dirs = candidate_dirs(plugin_opts)
   for _, win in ipairs(mux.all_windows()) do
     local ws = win:get_workspace()
     local bucket = result[ws] or { working = 0, waiting = 0, done = 0, idle = 0, error = 0, unknown = 0 }
     for _, tab in ipairs(win:tabs()) do
       for _, p in ipairs(tab:panes()) do
-        local impl, agent_opts = M.detect(p, plugin_opts)
-        if impl then
-          local st = impl.state(p, agent_opts)
-          if bucket[st] then bucket[st] = bucket[st] + 1 end
-        end
+        -- count と同じ 1 回読み取りに統一。impl が nil = エージェント未検出のペインは数えない。
+        local impl, st = resolve_in_dirs(p:pane_id(), dirs)
+        if impl and bucket[st] then bucket[st] = bucket[st] + 1 end
       end
     end
     result[ws] = bucket

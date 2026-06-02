@@ -203,6 +203,7 @@ ai.apply(config, {
   enabled_agents = nil,             -- nil = all; or { "claude", "codex" }
   default_agent = nil,              -- nil = first registered; or "claude"
   default_editor = nil,             -- nil = auto-detect (code/cursor/windsurf/zed/subl); or "/usr/local/bin/cursor" etc.
+  editor_links = false,             -- true: click file paths in terminal output to open them at the line in your editor
   locale = "ja",                    -- auto-detected from LANG env; "en" | "ja"
   modifier_prefix = "CMD",          -- auto-detected: macOS="CMD", Linux="CTRL"
   workspace = {
@@ -238,7 +239,7 @@ See `default_opts` in `plugin/init.lua` for all options.
 
 ### Appearance defaults
 
-Appearance and tab-bar settings (Catppuccin Mocha / opacity / blur / fancy tab bar, etc.) are **always applied, non-destructively**. If you set `config.X` yourself it takes precedence, so you can override defaults whether you write them before or after `apply()` (font is excluded).
+Appearance and tab-bar settings (Catppuccin Mocha / opacity / blur / fancy tab bar, etc.) are **always applied, non-destructively**. If you set `config.X` yourself it takes precedence, so you can override defaults whether you write them before or after `apply()`. The font family itself is not dictated, but when `config.font` is unset, JetBrains Mono with the OS standard Japanese font as a fallback is applied automatically (left untouched if you set `config.font` yourself).
 
 ```lua
 config.color_scheme = "Tokyo Night"        -- use a different scheme
@@ -248,7 +249,7 @@ config.use_fancy_tab_bar = false           -- back to the retro tab bar
 
 ## Adding a New Agent
 
-Implement the interface defined in `plugin/agent.lua` in `plugin/agents/<id>.lua`:
+Implement the interface defined in `plugin/service/agent.lua` in `plugin/service/agents/<id>.lua`:
 
 ```lua
 return {
@@ -264,7 +265,7 @@ return {
 }
 ```
 
-Register in `init.lua`: `agent.register(load_module("agents/myagent"))`
+Register in `init.lua`: `agent.register(load("service/agents/myagent"))`
 
 Configure the agent's hooks to call `hooks/agent_status.sh <id> <state>`.
 

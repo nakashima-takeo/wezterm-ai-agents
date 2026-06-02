@@ -29,20 +29,36 @@ local function detect_plugin_dir(user_dir)
   error("wezterm-ai-agents: plugin_dir not detected. Pass opts.plugin_dir or load via wezterm.plugin.require.")
 end
 
-local workspace, worktree, layout, selector, agent, ui, builtin_labels, builtin_icons
+local workspace, worktree, layout, selector, agent, ui, builtin_labels, builtin_icons, editor, links
 
 local all_agent_ids = { "claude", "cursor", "codex", "gemini" }
 
+-- モジュールを層順 (下位→上位) にロードする。配置と並びがそのまま依存階層を表す。
+-- 下位は UI を知らず、上位 (selector/ui) が deps 経由で下位を呼ぶ。循環は引数注入で回避済み。
 local function load_modules(plugin_dir, enabled_agents)
   local function load(rel) return dofile(plugin_dir .. "/plugin/" .. rel .. ".lua") end
-  workspace = load("workspace")
-  worktree = load("worktree")
-  layout = load("layout")
-  selector = load("selector")
-  agent = load("agent")
-  ui = load("ui")
-  builtin_labels = load("labels")
-  builtin_icons = load("icons")
+
+  -- resource/ 下位層: データ (他に依存しない)
+  builtin_labels = load("resource/labels")
+  builtin_icons = load("resource/icons")
+
+  -- service/ 下位層: I/O・外部コマンド (UI に依存しない)
+  agent = load("service/agent")
+  worktree = load("service/worktree/init")
+  worktree.setup(load("service/worktree/github"))
+  editor = load("service/editor")
+  links = load("service/links")
+
+  -- state/ 中位層: 永続化・レイアウト (agent/layout を引数注入し循環回避)
+  workspace = load("state/workspace/init")
+  workspace.setup(load("state/workspace/session"))
+  layout = load("state/layout")
+
+  -- ui/ 上位層: UI・オーケストレーション (deps 経由で下位/中位を呼ぶ)
+  ui = load("ui/ui")
+  selector = load("ui/selector/init")
+  selector.setup(load("ui/selector/workspace"), load("ui/selector/worktree"), load("ui/selector/ui"))
+
   for _, id in ipairs(enabled_agents or all_agent_ids) do
     local found = false
     for _, valid in ipairs(all_agent_ids) do
@@ -52,12 +68,12 @@ local function load_modules(plugin_dir, enabled_agents)
       end
     end
     if not found then error("wezterm-ai-agents: unknown agent '" .. id .. "'. Available: " .. table.concat(all_agent_ids, ", ")) end
-    agent.register(load("agents/" .. id))
+    agent.register(load("service/agents/" .. id))
   end
 end
 
 local M = {
-  version = "0.11.0",
+  version = "0.12.0",
   workspace = nil,
   worktree = nil,
   layout = nil,
@@ -88,6 +104,9 @@ local default_opts = {
   enabled_agents = nil, -- nil = all; or { "claude" } to register only specific agents
   default_agent = nil, -- nil = first registered; or "claude" to set default agent for Cmd+Shift+C
   default_editor = nil, -- nil = auto-detect (code/cursor/windsurf/zed/subl); or "/usr/local/bin/cursor" etc.
+  -- ターミナル出力中のファイルパスをクリックでエディタの該当行に開く (editor:// / editor-rel://)。
+  -- 実在しないパスにも下線が出る WezTerm の制約上、誤クリックの空振りが起こりうるため既定 off。
+  editor_links = false,
   agents = {
     -- agent-specific overrides, e.g. claude = { command = "claude --foo" }
   },
@@ -103,6 +122,8 @@ local default_opts = {
     },
     right_status = {
       fg = "#a6adc8",
+      cwd_width = 20, -- 右ステータスの cwd 表示を固定幅 (桁) に揃える
+      reserve = 48, -- タブバー幅算出で差し引く右ステータスの占有幅 (桁)
       -- colors: derived from first registered agent at apply() time.
       -- Override here to use custom colors instead of agent defaults.
     },
@@ -232,6 +253,7 @@ function M.apply(config, user_opts)
     selector = selector,
     agent = agent,
     ui = ui,
+    editor = editor,
     opts = opts,
   }
   M.deps = deps
@@ -347,6 +369,9 @@ function M.apply(config, user_opts)
     end
     config.keys = merged
   end
+
+  -- ターミナル出力のファイルパスをクリック可能にする (opt-in)。
+  if opts.editor_links then links.setup(config, deps) end
 
   return M
 end

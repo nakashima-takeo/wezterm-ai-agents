@@ -3,8 +3,8 @@ local H = require("helper")
 local test = H.test
 
 local function build_with_opts(opts)
-  local selector = H.load_mod("selector")
-  local agent = H.load_mod("agent")
+  local selector = H.load_selector()
+  local agent = H.load_mod("service/agent")
   agent.register({
     id = "test",
     display_name = "Test",
@@ -14,8 +14,8 @@ local function build_with_opts(opts)
     session_id = function() return nil end,
     spawn_args = function() return {} end,
   })
-  local workspace = H.load_mod("workspace")
-  local layout = H.load_mod("layout")
+  local workspace = H.load_workspace()
+  local layout = H.load_mod("state/layout")
   local deps = {
     opts = opts,
     agent = agent,
@@ -138,6 +138,104 @@ end)
 test("disabled_keybinds でヘルプを無効化できる", function()
   local keys = build_with_opts({ disabled_keybinds = { "help" }, keybinds = {} })
   H.assert_nil(find_keybind(keys, "H", "CMD|SHIFT"), "disabled help keybind should not exist")
+end)
+
+H.section("セレクタ callback スモーク (注入配線の退行検出)")
+
+-- selector を分割サブモジュール構成で結線し、主要セレクタ callback を mock window/pane で
+-- 1 回ずつ実行する。build_keybinds は未実行クロージャを作るだけなので、setup() の結線漏れや
+-- サブモジュールの再エクスポート漏れは「キー表の構築は成功・実行時に nil 参照」で表面化する。
+-- この実行テストがその nil 参照を炙る。
+test("退行検出：主要セレクタ callback が nil 参照なく実行できる", function()
+  local selector = H.load_selector()
+
+  local agent = H.load_mod("service/agent")
+  agent.register({
+    id = "test",
+    display_name = "Test",
+    default_opts = {},
+    detect = function() return false end,
+    state = function() return "idle" end,
+    session_id = function() return nil end,
+    spawn_args = function() return {} end,
+  })
+
+  -- ワークスペースを 1 件含む状態ファイル。workspace_selector が UI ヘルパー (build_ws_header
+  -- 等) 経由でこれを描画するため、selector/ui の二段注入も実行経路で踏まれる。
+  local ws_file = H.tmp_dir() .. "/ws.json"
+  H.write_file(ws_file, '{"workspaces":[{"name":"demo","cwd":"/tmp"}]}')
+
+  local labels = H.load_mod("resource/labels")
+  local opts = {
+    labels = labels.en,
+    workspace = { file = ws_file, default_workspace = "default" },
+    ui = { right_status = { colors = {}, icons = { idle = "i" } } },
+    icons = { folder = "F" },
+    nerd_font = false,
+    default_tabs = { {} },
+    modifier_prefix = "CMD",
+    disabled_keybinds = {},
+    keybinds = {},
+  }
+  local deps = {
+    opts = opts,
+    agent = agent,
+    workspace = H.load_workspace(),
+    layout = H.load_mod("state/layout"),
+    worktree = {}, -- cwd 取得不可で早期 return するため未参照
+    editor = { detect = function() return nil end },
+  }
+
+  local window = {
+    perform_action = function() end,
+    toast_notification = function() end,
+    window_id = function() return 1 end,
+    active_workspace = function() return "default" end,
+  }
+  local pane = { get_current_working_dir = function() return nil end }
+
+  local keys = selector.build_keybinds(deps)
+  -- workspace/worktree/agent/help/editor/pin の各 callback (= 各サブモジュール境界) を踏む
+  for _, target in ipairs({ "S", "X", "A", "H", "E", "P" }) do
+    local k = find_by_action_key(keys, target)
+    H.assert_not_nil(k, target .. " keybind should exist")
+    local cb = k.action.__callback
+    H.assert_not_nil(cb, target .. " keybind should have a callback")
+    cb(window, pane) -- 結線漏れがあればここで nil 参照エラー → テスト fail
+  end
+
+  -- update-status から毎回呼ばれる主要結線点 maybe_prefetch の再エクスポート (setup 内 M.maybe_prefetch = wt.maybe_prefetch) も踏む。
+  -- pane.get_current_working_dir が nil を返すため cwd nil で早期 return し、worktree モック未参照で nil 参照しない。
+  H.assert_not_nil(selector.maybe_prefetch, "maybe_prefetch should be re-exported by setup()")
+  selector.maybe_prefetch(window, pane, deps)
+end)
+
+H.section("format_keybind の修飾キー記号 (OS / nerd_font 分岐)")
+
+-- ⌃⇧⌘ の Unicode バイト列
+local U_CTRL, U_SHIFT, U_CMD = "\xE2\x8C\x83", "\xE2\x87\xA7", "\xE2\x8C\x98"
+
+test("non-darwin では nerd でも Unicode 記号に倒す (Apple グリフ豆腐化を防ぐ)", function()
+  local ui = H.load_mod("ui/selector/ui")
+  local orig = wezterm.target_triple
+  wezterm.target_triple = "x86_64-unknown-linux-gnu"
+  -- CTRL|SHIFT は表示順 ⌃⌥⇧⌘ に並び、key はそのまま。NERD_MODS (Apple グリフ) は使われない。
+  H.assert_eq(ui.format_keybind("S", "CTRL|SHIFT", true), U_CTRL .. " " .. U_SHIFT .. " S")
+  wezterm.target_triple = orig
+end)
+
+test("darwin + nerd_font では NERD_MODS (Apple グリフ) を使う", function()
+  local ui = H.load_mod("ui/selector/ui")
+  local orig = wezterm.target_triple
+  wezterm.target_triple = "aarch64-apple-darwin"
+  -- mock の nerdfonts は全グリフ "?" を返す。SHIFT/CMD の 2 グリフが引かれることを確認。
+  H.assert_eq(ui.format_keybind("S", "CMD|SHIFT", true), "? ? S")
+  wezterm.target_triple = orig
+end)
+
+test("nerd_font=false は OS 非依存で Unicode 記号 (表示順 ⌃⌥⇧⌘)", function()
+  local ui = H.load_mod("ui/selector/ui")
+  H.assert_eq(ui.format_keybind("S", "CMD|SHIFT", false), U_SHIFT .. " " .. U_CMD .. " S")
 end)
 
 H.finish()

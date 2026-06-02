@@ -205,6 +205,7 @@ ai.apply(config, {
   enabled_agents = nil,             -- nil = all; or { "claude", "codex" }
   default_agent = nil,              -- nil = first registered; or "claude"
   default_editor = nil,             -- nil = auto-detect (code/cursor/windsurf/zed/subl); or "/usr/local/bin/cursor" etc.
+  editor_links = false,             -- true でターミナル出力のファイルパスをクリック→エディタの該当行で開く
   locale = "ja",                    -- auto-detected from LANG env; "en" | "ja"
   modifier_prefix = "CMD",          -- auto-detected: macOS="CMD", Linux="CTRL"
   workspace = {
@@ -240,7 +241,7 @@ ai.apply(config, {
 
 ### 見た目のデフォルト
 
-見た目とタブバー設定 (Catppuccin Mocha / 透過 / ブラー / fancy タブバー等) は**常時・非破壊で適用**される。利用者が `config.X` を設定していればそちらが優先されるので、好みは `apply()` の前後どちらに書いても上書きできる (フォントは対象外)。
+見た目とタブバー設定 (Catppuccin Mocha / 透過 / ブラー / fancy タブバー等) は**常時・非破壊で適用**される。利用者が `config.X` を設定していればそちらが優先されるので、好みは `apply()` の前後どちらに書いても上書きできる。フォントは family 本体を強制しないが、`config.font` 未設定時のみ JetBrains Mono に OS 標準の和文フォントをフォールバックとして自動付加する (`config.font` を自分で設定すれば触らない)。
 
 ```lua
 config.color_scheme = "Tokyo Night"        -- 別の配色に置換
@@ -250,7 +251,7 @@ config.use_fancy_tab_bar = false           -- 標準のタブバーに戻す
 
 ## エージェントの追加
 
-`plugin/agents/<id>.lua` に以下のインターフェースを実装:
+`plugin/service/agents/<id>.lua` に以下のインターフェースを実装:
 
 ```lua
 return {
@@ -265,7 +266,7 @@ return {
 }
 ```
 
-`init.lua` で登録: `agent.register(load_module("agents/myagent"))`
+`init.lua` で登録: `agent.register(load("service/agents/myagent"))`
 
 エージェント側のhooksから `hooks/agent_status.sh <id> <state>` を呼ぶように設定してください。
 
