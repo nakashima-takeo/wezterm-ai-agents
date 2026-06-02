@@ -249,6 +249,22 @@ test("parse_pr_listは空・不正入力で空配列を返す", function()
   H.assert_eq(#worktree.parse_pr_list("not json"), 0)
 end)
 
+test("parse_pr_listはauthorとreviewRequests(Userのみ)を正規化する", function()
+  local worktree = load_mod("worktree")
+  local raw = [[
+    [
+      {"number":9,"headRefName":"feat/z","state":"OPEN","isCrossRepository":false,
+       "author":{"login":"me"},
+       "reviewRequests":[{"__typename":"User","login":"rev1"},{"__typename":"Team","name":"core","slug":"core"}]}
+    ]
+  ]]
+  local list = worktree.parse_pr_list(raw)
+
+  H.assert_eq(list[1].author, "me")
+  H.assert_eq(#list[1].review_requests, 1) -- Team は login が無いので除外
+  H.assert_eq(list[1].review_requests[1], "rev1")
+end)
+
 test("pull_requestsはキャッシュからheadRefName→{number,state}のmapを返す", function()
   local worktree = load_mod("worktree")
   local git_root = "/tmp/__wt_pr_map_test"

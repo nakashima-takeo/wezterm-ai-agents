@@ -633,6 +633,16 @@ function M.worktree_selector(window, pane, deps)
   local worktrees = deps.worktree.list(git_root)
   local prs = deps.worktree.pull_requests(git_root)
   local issue_map = deps.worktree.issues(git_root)
+  local me = deps.worktree.current_user()
+
+  -- 自分が含まれるか (assignee / reviewer / author 共通)。me 未取得なら常に false。
+  local function includes_me(logins)
+    if not me then return false end
+    for _, login in ipairs(logins or {}) do
+      if login == me then return true end
+    end
+    return false
+  end
 
   local function pr_marker(branch)
     local pr = prs[branch]
@@ -724,34 +734,43 @@ function M.worktree_selector(window, pane, deps)
   end
   local pr_list =
     deps.worktree.uncovered_prs(deps.worktree.pull_request_list(git_root), reachable, deps.worktree.materialized_prs(git_root))
+  -- 自分が作成 or レビュー依頼された PR を「自分関係」とし、Issue と同じく黄色+先頭に寄せる。
+  for _, pr in ipairs(pr_list) do
+    pr.mine = (me and pr.author == me) or includes_me(pr.review_requests)
+  end
+  table.sort(pr_list, function(a, b)
+    if a.mine ~= b.mine then return a.mine end
+    return a.number > b.number -- 自分関係内・それ以外とも新しい番号を上に
+  end)
   if #pr_list > 0 then
     table.insert(choices, { id = "_sep_pr", label = "── Pull Requests ──" })
     for _, pr in ipairs(pr_list) do
-      local color = pr.state == "MERGED" and "Purple" or (pr.state == "CLOSED" and "Maroon" or "Green")
       local text = pr.headRefName
       if pr.owner then text = text .. " (@" .. pr.owner .. ")" end
-      local fmt = {
-        { Foreground = { AnsiColor = color } },
-        { Text = "\xEF\x90\x87 #" .. tostring(pr.number) .. " " },
-        "ResetAttributes",
-        { Text = text },
-      }
+      local fmt
+      if pr.mine then
+        fmt = {
+          { Foreground = { AnsiColor = "Yellow" } },
+          { Text = "\xEF\x90\x87 #" .. tostring(pr.number) .. " " .. text },
+          "ResetAttributes",
+        }
+      else
+        local color = pr.state == "MERGED" and "Purple" or (pr.state == "CLOSED" and "Maroon" or "Green")
+        fmt = {
+          { Foreground = { AnsiColor = color } },
+          { Text = "\xEF\x90\x87 #" .. tostring(pr.number) .. " " },
+          "ResetAttributes",
+          { Text = text },
+        }
+      end
       table.insert(choices, { id = "pr:" .. tostring(pr.number), label = wezterm.format(fmt) })
     end
   end
 
   -- リンク済みブランチがローカルに到達可能な Issue は worktree/branch 側に出ているので除外する。
-  local me = deps.worktree.current_user()
-  local function assigned_to_me(issue)
-    if not me then return false end
-    for _, login in ipairs(issue.assignees) do
-      if login == me then return true end
-    end
-    return false
-  end
   local issues = deps.worktree.uncovered_issues(deps.worktree.issue_list(git_root), reachable)
   for _, issue in ipairs(issues) do
-    issue.mine = assigned_to_me(issue)
+    issue.mine = includes_me(issue.assignees) -- 自分アサインを強調
   end
   -- 自分アサインを先頭に寄せる (安定ソート: 番号昇順を保つ)。
   table.sort(issues, function(a, b)

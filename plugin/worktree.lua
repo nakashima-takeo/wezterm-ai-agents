@@ -175,7 +175,7 @@ local function issue_cache_file(git_root) return cache_base() .. "/wezterm-issue
 -- 自分の login キャッシュ。Issue の assignee 強調用 (リポジトリ非依存なので 1 ファイルに集約)。
 local function gh_user_cache_file() return cache_base() .. "/wezterm-gh-user" end
 
-local GH_PR_LIST = "gh pr list --json number,headRefName,state,isCrossRepository,headRepositoryOwner --limit 200"
+local GH_PR_LIST = "gh pr list --json number,headRefName,state,isCrossRepository,headRepositoryOwner,author,reviewRequests --limit 200"
 
 -- Issue は linkedBranches (GitHub 公式の Issue↔ブランチリンク) ごと GraphQL で引く。
 -- これを反転して「ブランチ→Issue番号」マップを作れば、命名規約に依存せずリネーム済みや
@@ -233,7 +233,7 @@ function M.refresh_pr_cache(git_root) refresh_cache(git_root, GH_PR_LIST, pr_cac
 
 function M.refresh_issue_cache(git_root) refresh_cache(git_root, GH_ISSUE_LIST, issue_cache_file(git_root)) end
 
--- 生 JSON を正規化した配列 [{ number, headRefName, state, fork, owner }] に変換する純関数。
+-- 生 JSON を正規化した配列 [{ number, headRefName, state, fork, owner, author, review_requests }] に変換する純関数。
 function M.parse_pr_list(raw)
   if not raw or raw == "" then return {} end
   local ok, data = pcall(wezterm.json_parse, raw)
@@ -241,12 +241,20 @@ function M.parse_pr_list(raw)
   local list = {}
   for _, pr in ipairs(data) do
     if pr.number and pr.headRefName then
+      local reviewers = {}
+      if type(pr.reviewRequests) == "table" then
+        for _, r in ipairs(pr.reviewRequests) do
+          if type(r) == "table" and r.login then table.insert(reviewers, r.login) end -- User のみ (Team は login 無し)
+        end
+      end
       table.insert(list, {
         number = pr.number,
         headRefName = pr.headRefName,
         state = pr.state,
         fork = pr.isCrossRepository == true,
         owner = type(pr.headRepositoryOwner) == "table" and pr.headRepositoryOwner.login or nil,
+        author = type(pr.author) == "table" and pr.author.login or nil,
+        review_requests = reviewers,
       })
     end
   end
