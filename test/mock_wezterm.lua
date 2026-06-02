@@ -26,26 +26,53 @@ function M.format(parts)
   return table.concat(out)
 end
 
-function M.truncate_right(s, n) return (s or ""):sub(1, n) end
-function M.truncate_left(s, n) return (s or ""):sub(-n) end
+-- UTF-8 1 文字を進める。実 wezterm のセル幅近似に合わせ
+-- 3/4 バイト列 (CJK・絵文字) を全角=2 桁、それ以外を 1 桁とする。
+local function next_char(s, i)
+  local b = s:byte(i)
+  if b < 0x80 then return i + 1, 1 end
+  if b < 0xE0 then return i + 2, 1 end -- 2 バイト (ラテン拡張等) は 1 桁
+  if b < 0xF0 then return i + 3, 2 end -- 3 バイト (CJK) は 2 桁
+  return i + 4, 2 -- 4 バイト (絵文字等) は 2 桁
+end
 
--- 実 wezterm のセル幅近似。UTF-8 3/4 バイト列 (CJK・絵文字) を全角=2 桁、それ以外を 1 桁とする。
+-- 実 wezterm のセル幅近似。
 function M.column_width(s)
   s = s or ""
   local w, i = 0, 1
   while i <= #s do
-    local b = s:byte(i)
-    if b < 0x80 then
-      i, w = i + 1, w + 1
-    elseif b < 0xE0 then
-      i, w = i + 2, w + 1 -- 2 バイト (ラテン拡張等) は 1 桁
-    elseif b < 0xF0 then
-      i, w = i + 3, w + 2 -- 3 バイト (CJK) は 2 桁
-    else
-      i, w = i + 4, w + 2 -- 4 バイト (絵文字等) は 2 桁
-    end
+    local nexti, cw = next_char(s, i)
+    i, w = nexti, w + cw
   end
   return w
+end
+
+-- 前方(左)を残して幅 n セルに収める。多バイト境界は割らない (実 wezterm 同様セル幅基準)。
+function M.truncate_right(s, n)
+  s = s or ""
+  local w, i = 0, 1
+  while i <= #s do
+    local nexti, cw = next_char(s, i)
+    if w + cw > n then break end
+    i, w = nexti, w + cw
+  end
+  return s:sub(1, i - 1)
+end
+
+-- 後方(右)を残して幅 n セルに収める。多バイト境界は割らない。
+function M.truncate_left(s, n)
+  s = s or ""
+  local offs, cells, i = {}, {}, 1
+  while i <= #s do
+    local nexti, cw = next_char(s, i)
+    offs[#offs + 1], cells[#cells + 1], i = i, cw, nexti
+  end
+  local w, start = 0, #s + 1
+  for k = #offs, 1, -1 do
+    if w + cells[k] > n then break end
+    w, start = w + cells[k], offs[k]
+  end
+  return s:sub(start)
 end
 
 function M.log_info(...) print("[wezterm.log_info]", ...) end
