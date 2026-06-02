@@ -266,7 +266,7 @@ return {
 }
 ```
 
-`init.lua` で登録: `agent.register(load_module("agents/myagent"))`
+`init.lua` で登録: `agent.register(load("service/agents/myagent"))`
 
 エージェント側のhooksから `hooks/agent_status.sh <id> <state>` を呼ぶように設定してください。
 

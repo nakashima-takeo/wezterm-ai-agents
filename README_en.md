@@ -249,7 +249,7 @@ config.use_fancy_tab_bar = false           -- back to the retro tab bar
 
 ## Adding a New Agent
 
-Implement the interface defined in `plugin/agent.lua` in `plugin/agents/<id>.lua`:
+Implement the interface defined in `plugin/service/agent.lua` in `plugin/service/agents/<id>.lua`:
 
 ```lua
 return {
@@ -265,7 +265,7 @@ return {
 }
 ```
 
-Register in `init.lua`: `agent.register(load_module("agents/myagent"))`
+Register in `init.lua`: `agent.register(load("service/agents/myagent"))`
 
 Configure the agent's hooks to call `hooks/agent_status.sh <id> <state>`.
 
