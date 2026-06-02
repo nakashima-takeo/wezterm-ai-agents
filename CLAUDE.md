@@ -55,10 +55,11 @@ plugin/
 ```
 
 **主要パターン:**
-- エージェント状態は hooks が pane ごとに JSON ファイルを書き込む push 方式: `/tmp/wezterm-agent-<pane_id>`
+- エージェント状態は hooks が pane ごとに JSON ファイルを書き込む push 方式: `$XDG_STATE_HOME/wezterm-ai-agents/<gui_pid>/wezterm-agent-<pane_id>` (GUI プロセス PID 名前空間配下。フォールバック `~/.local/state`)
 - `hooks/agent_status.sh` が書き込み側 (全エージェント共通)。Lua 側は `wezterm.json_parse()` で読み取り
+- PID 名前空間は書き込み側 `WEZTERM_UNIX_SOCKET` の `gui-sock-<pid>` と読み取り側 `wezterm.procinfo.pid()` が同一 GUI プロセス PID に合意する前提 (mux 内蔵の既定構成のみ。分離 mux 構成は非対応)
 - JSON 形式: `{"agent":"<id>","state":"<state>","ts":<unix>,"session_id":"<sid>"}`
-- ワークスペースデータは `~/.wezterm-workspaces.json` にアトミック書き込み (tmp + rename)
+- ワークスペースデータは `$XDG_STATE_HOME/wezterm-ai-agents/workspaces.json` (PID 名前空間なし) にアトミック書き込み (tmp + rename)
 - 循環依存は関数引数でモジュールを渡して回避 (`agent_mod`, `layout_mod`)
 - 非同期/外部コマンド実行の方針は [docs/async.md](docs/async.md) を参照 (UI ブロック回避、背景取得 + キャッシュ等)
 
