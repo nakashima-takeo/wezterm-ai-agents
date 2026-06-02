@@ -14,12 +14,13 @@ local mux = wezterm.mux
 local M = {}
 
 -- session(snapshot/sync/create) を結線する。init.lua から呼ばれる。
--- session に自身(storage)を渡し、session の公開関数を M に再エクスポートして単一ファサードを保つ。
+-- session に自身(storage)を渡し、session の公開関数(M.*)を総なめで再エクスポートして単一ファサードを保つ。
+-- 手動列挙だと session への関数追加時に追記漏れで実行時 nil 参照になるため、ドリフトを構造的に排除する。
 function M.setup(session)
   session.setup(M)
-  M.snapshot_tabs = session.snapshot_tabs
-  M.sync_all = session.sync_all
-  M.create = session.create
+  for k, v in pairs(session) do
+    if type(v) == "function" and k ~= "setup" then M[k] = v end
+  end
 end
 
 -- ============== JSON read / write ==============

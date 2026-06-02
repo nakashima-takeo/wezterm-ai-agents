@@ -160,29 +160,13 @@ function M.prune(git_root) wezterm.run_child_process({ "git", "-C", git_root, "w
 function M.fetch(git_root) return wezterm.run_child_process({ "git", "-C", git_root, "fetch", "--prune" }) end
 
 -- github(PR/Issue 連携) を結線する。init.lua から呼ばれる。
--- github に自身(core: resolve_path 等)を渡し、github の公開関数を M に再エクスポートして単一ファサードを保つ。
+-- github に自身(core: resolve_path 等)を渡し、github の公開関数(M.*)を総なめで再エクスポートして単一ファサードを保つ。
+-- 手動列挙だと github への関数追加時に追記漏れで実行時 nil 参照になるため、ドリフトを構造的に排除する。
 function M.setup(github)
   github.setup(M)
-  M.prefetch = github.prefetch
-  M.refresh_pr_cache = github.refresh_pr_cache
-  M.refresh_issue_cache = github.refresh_issue_cache
-  M.parse_pr_list = github.parse_pr_list
-  M.parse_issue_list = github.parse_issue_list
-  M.pull_request_list = github.pull_request_list
-  M.issue_list = github.issue_list
-  M.issues = github.issues
-  M.uncovered_issues = github.uncovered_issues
-  M.uncovered_prs = github.uncovered_prs
-  M.relevant_prs = github.relevant_prs
-  M.relevant_issues = github.relevant_issues
-  M.current_user = github.current_user
-  M.pr_branch_config = github.pr_branch_config
-  M.materialized_prs = github.materialized_prs
-  M.pull_requests = github.pull_requests
-  M.add_pr_worktree = github.add_pr_worktree
-  M.add_issue_worktree = github.add_issue_worktree
-  M.open_pr_web = github.open_pr_web
-  M.open_issue_web = github.open_issue_web
+  for k, v in pairs(github) do
+    if type(v) == "function" and k ~= "setup" then M[k] = v end
+  end
 end
 
 return M
