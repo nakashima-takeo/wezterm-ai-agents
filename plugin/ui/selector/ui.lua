@@ -113,8 +113,11 @@ local UNICODE_MODS = {
   { "CMD", "\xE2\x8C\x98" }, -- ⌘
 }
 
-local function format_keybind(key, mods, nerd)
-  local mod_set = nerd and NERD_MODS or UNICODE_MODS
+function M.format_keybind(key, mods, nerd)
+  -- NERD_MODS は Apple キーボード印字専用グリフなので darwin 限定。non-darwin では nerd でも
+  -- 汎用 Unicode 記号 (⌃⌥⇧⌘) に倒す (Apple グリフを持たない Nerd Font で豆腐化するのを防ぐ)。
+  local apple_mods = nerd and wezterm.target_triple:find("darwin") ~= nil
+  local mod_set = apple_mods and NERD_MODS or UNICODE_MODS
   local key_set = nerd and NERD_KEYS or UNICODE_KEYS
   local present = {}
   for m in mods:gmatch("[^|]+") do
@@ -147,7 +150,7 @@ function M.help_selector(window, pane, deps, items)
     local fmt = {
       { Attribute = { Intensity = "Bold" } },
       { Foreground = { AnsiColor = "Aqua" } },
-      { Text = format_keybind(it.key, it.mods, deps.opts.nerd_font) },
+      { Text = M.format_keybind(it.key, it.mods, deps.opts.nerd_font) },
       "ResetAttributes",
       { Text = "  " .. (L[it.desc] or it.desc) },
     }
