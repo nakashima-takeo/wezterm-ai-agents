@@ -36,6 +36,14 @@ function H.load_selector()
   return selector
 end
 
+-- worktree は init(ローカル git worktree) + github(PR/Issue 連携) に分割されており、
+-- 本体 init.lua と同じく setup() で結線して単一ファサードにする。
+function H.load_worktree()
+  local worktree = H.load_mod("service/worktree/init")
+  worktree.setup(H.load_mod("service/worktree/github"))
+  return worktree
+end
+
 -- Each test runs in its own pcall so failures don't cascade.
 function H.test(name, fn)
   local ok, err = pcall(fn)

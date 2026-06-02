@@ -46,7 +46,9 @@ plugin/
 ├── service/            — 下位層: 外部I/O・検出 (UI に依存しない)
 │   ├── agent.lua       — エージェントレジストリ、検出、状態集約、JSON リーダー
 │   ├── agents/         — 各エージェント実装 (claude/codex/cursor/gemini)
-│   ├── worktree.lua    — git worktree 操作 (list/add/remove/prune) + PR/Issue
+│   ├── worktree/
+│   │   ├── init.lua    — ローカル git worktree 操作 (list/add/remove/prune) + 命名/パス展開
+│   │   └── github.lua  — PR/Issue 連携 (gh 取得・キャッシュ・パース・フィルタ・worktree生成)
 │   ├── editor.lua      — エディタ検出・起動引数
 │   └── links.lua       — ターミナル出力パスの editor:// リンク化
 └── resource/           — 下位層: 静的データ

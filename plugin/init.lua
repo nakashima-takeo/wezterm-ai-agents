@@ -44,7 +44,8 @@ local function load_modules(plugin_dir, enabled_agents)
 
   -- service/ 下位層: I/O・外部コマンド (UI に依存しない)
   agent = load("service/agent")
-  worktree = load("service/worktree")
+  worktree = load("service/worktree/init")
+  worktree.setup(load("service/worktree/github"))
   editor = load("service/editor")
   links = load("service/links")
 
