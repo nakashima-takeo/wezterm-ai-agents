@@ -28,6 +28,14 @@ function H.load_workspace()
   return workspace
 end
 
+-- selector は init(coordinator) + workspace/worktree/ui に分割されており、
+-- 本体 init.lua と同じく setup() でサブモジュールを結線して単一ファサードにする。
+function H.load_selector()
+  local selector = H.load_mod("selector/init")
+  selector.setup(H.load_mod("selector/workspace"), H.load_mod("selector/worktree"), H.load_mod("selector/ui"))
+  return selector
+end
+
 -- Each test runs in its own pcall so failures don't cascade.
 function H.test(name, fn)
   local ok, err = pcall(fn)

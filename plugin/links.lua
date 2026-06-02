@@ -70,12 +70,6 @@ function M.resolve(uri, cwd, exists)
   return nil
 end
 
-local function get_cwd_path(pane)
-  local cwd = pane:get_current_working_dir()
-  if not cwd then return nil end
-  return cwd.file_path or tostring(cwd):gsub("^file://[^/]*", "")
-end
-
 local function file_exists(p)
   local fh = io.open(p, "r")
   if not fh then return false end
@@ -87,7 +81,7 @@ end
 -- 開けない時もブラウザには渡さない。他スキームは WezTerm の既定動作に委ねる (return nil)。
 local function handle(_window, pane, uri, deps)
   if not M.is_editor_uri(uri) then return end
-  local abs, line, col = M.resolve(uri, get_cwd_path(pane), file_exists)
+  local abs, line, col = M.resolve(uri, deps.workspace.get_cwd_path(pane), file_exists)
   if abs then
     local editor = deps.editor.detect(deps.opts.default_editor)
     if editor then wezterm.background_child_process(deps.editor.open_args(editor, abs, line, col)) end
