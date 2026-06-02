@@ -29,7 +29,7 @@ local function detect_plugin_dir(user_dir)
   error("wezterm-ai-agents: plugin_dir not detected. Pass opts.plugin_dir or load via wezterm.plugin.require.")
 end
 
-local workspace, worktree, layout, selector, agent, ui, builtin_labels, builtin_icons
+local workspace, worktree, layout, selector, agent, ui, builtin_labels, builtin_icons, editor, links
 
 local all_agent_ids = { "claude", "cursor", "codex", "gemini" }
 
@@ -41,6 +41,8 @@ local function load_modules(plugin_dir, enabled_agents)
   selector = load("selector")
   agent = load("agent")
   ui = load("ui")
+  editor = load("editor")
+  links = load("links")
   builtin_labels = load("labels")
   builtin_icons = load("icons")
   for _, id in ipairs(enabled_agents or all_agent_ids) do
@@ -88,6 +90,9 @@ local default_opts = {
   enabled_agents = nil, -- nil = all; or { "claude" } to register only specific agents
   default_agent = nil, -- nil = first registered; or "claude" to set default agent for Cmd+Shift+C
   default_editor = nil, -- nil = auto-detect (code/cursor/windsurf/zed/subl); or "/usr/local/bin/cursor" etc.
+  -- ターミナル出力中のファイルパスをクリックでエディタの該当行に開く (editor:// / editor-rel://)。
+  -- 実在しないパスにも下線が出る WezTerm の制約上、誤クリックの空振りが起こりうるため既定 off。
+  editor_links = false,
   agents = {
     -- agent-specific overrides, e.g. claude = { command = "claude --foo" }
   },
@@ -232,6 +237,7 @@ function M.apply(config, user_opts)
     selector = selector,
     agent = agent,
     ui = ui,
+    editor = editor,
     opts = opts,
   }
   M.deps = deps
@@ -347,6 +353,9 @@ function M.apply(config, user_opts)
     end
     config.keys = merged
   end
+
+  -- ターミナル出力のファイルパスをクリック可能にする (opt-in)。
+  if opts.editor_links then links.setup(config, deps) end
 
   return M
 end

@@ -12,6 +12,8 @@ test("正常系：全モジュールがエラーなくロードできる", funct
     "layout",
     "ui",
     "selector",
+    "editor",
+    "links",
     "agents/claude",
     "agents/codex",
     "agents/cursor",

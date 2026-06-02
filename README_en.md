@@ -203,6 +203,7 @@ ai.apply(config, {
   enabled_agents = nil,             -- nil = all; or { "claude", "codex" }
   default_agent = nil,              -- nil = first registered; or "claude"
   default_editor = nil,             -- nil = auto-detect (code/cursor/windsurf/zed/subl); or "/usr/local/bin/cursor" etc.
+  editor_links = false,             -- true: click file paths in terminal output to open them at the line in your editor
   locale = "ja",                    -- auto-detected from LANG env; "en" | "ja"
   modifier_prefix = "CMD",          -- auto-detected: macOS="CMD", Linux="CTRL"
   workspace = {
