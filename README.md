@@ -251,7 +251,7 @@ config.use_fancy_tab_bar = false           -- 標準のタブバーに戻す
 
 ## エージェントの追加
 
-`plugin/agents/<id>.lua` に以下のインターフェースを実装:
+`plugin/service/agents/<id>.lua` に以下のインターフェースを実装:
 
 ```lua
 return {

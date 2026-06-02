@@ -14,7 +14,7 @@ H.plugin_dir = io.popen("pwd"):read("*l")
 function H.load_mod(rel) return dofile(H.plugin_dir .. "/plugin/" .. rel .. ".lua") end
 
 function H.load_agent(rel)
-  local agent = H.load_mod("agent")
+  local agent = H.load_mod("service/agent")
   local impl = H.load_mod(rel)
   agent.register(impl)
   return impl
@@ -23,16 +23,16 @@ end
 -- workspace は init(storage+CRUD) と session(snapshot/sync/create) に分割されており、
 -- 本体 init.lua と同じく setup() で結線して単一ファサードにする。
 function H.load_workspace()
-  local workspace = H.load_mod("workspace/init")
-  workspace.setup(H.load_mod("workspace/session"))
+  local workspace = H.load_mod("state/workspace/init")
+  workspace.setup(H.load_mod("state/workspace/session"))
   return workspace
 end
 
 -- selector は init(coordinator) + workspace/worktree/ui に分割されており、
 -- 本体 init.lua と同じく setup() でサブモジュールを結線して単一ファサードにする。
 function H.load_selector()
-  local selector = H.load_mod("selector/init")
-  selector.setup(H.load_mod("selector/workspace"), H.load_mod("selector/worktree"), H.load_mod("selector/ui"))
+  local selector = H.load_mod("ui/selector/init")
+  selector.setup(H.load_mod("ui/selector/workspace"), H.load_mod("ui/selector/worktree"), H.load_mod("ui/selector/ui"))
   return selector
 end
 

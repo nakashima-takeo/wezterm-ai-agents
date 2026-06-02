@@ -2,8 +2,8 @@ package.path = package.path .. ";test/?.lua"
 local H = require("helper")
 local test, load_mod = H.test, H.load_mod
 
-local links = load_mod("links")
-local editor = load_mod("editor")
+local links = load_mod("service/links")
+local editor = load_mod("service/editor")
 
 H.section("links.parse_target — 行/列の切り出し")
 

@@ -4,7 +4,7 @@ local test = H.test
 
 local function build_with_opts(opts)
   local selector = H.load_selector()
-  local agent = H.load_mod("agent")
+  local agent = H.load_mod("service/agent")
   agent.register({
     id = "test",
     display_name = "Test",
@@ -15,7 +15,7 @@ local function build_with_opts(opts)
     spawn_args = function() return {} end,
   })
   local workspace = H.load_workspace()
-  local layout = H.load_mod("layout")
+  local layout = H.load_mod("state/layout")
   local deps = {
     opts = opts,
     agent = agent,
@@ -149,7 +149,7 @@ H.section("セレクタ callback スモーク (注入配線の退行検出)")
 test("退行検出：主要セレクタ callback が nil 参照なく実行できる", function()
   local selector = H.load_selector()
 
-  local agent = H.load_mod("agent")
+  local agent = H.load_mod("service/agent")
   agent.register({
     id = "test",
     display_name = "Test",
@@ -165,7 +165,7 @@ test("退行検出：主要セレクタ callback が nil 参照なく実行で�
   local ws_file = H.tmp_dir() .. "/ws.json"
   H.write_file(ws_file, '{"workspaces":[{"name":"demo","cwd":"/tmp"}]}')
 
-  local labels = H.load_mod("labels")
+  local labels = H.load_mod("resource/labels")
   local opts = {
     labels = labels.en,
     workspace = { file = ws_file, default_workspace = "default" },
@@ -181,7 +181,7 @@ test("退行検出：主要セレクタ callback が nil 参照なく実行で�
     opts = opts,
     agent = agent,
     workspace = H.load_workspace(),
-    layout = H.load_mod("layout"),
+    layout = H.load_mod("state/layout"),
     worktree = {}, -- cwd 取得不可で早期 return するため未参照
     editor = { detect = function() return nil end },
   }

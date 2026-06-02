@@ -38,25 +38,25 @@ local all_agent_ids = { "claude", "cursor", "codex", "gemini" }
 local function load_modules(plugin_dir, enabled_agents)
   local function load(rel) return dofile(plugin_dir .. "/plugin/" .. rel .. ".lua") end
 
-  -- 下位層: データ (他に依存しない)
-  builtin_labels = load("labels")
-  builtin_icons = load("icons")
+  -- resource/ 下位層: データ (他に依存しない)
+  builtin_labels = load("resource/labels")
+  builtin_icons = load("resource/icons")
 
-  -- 下位層: I/O・外部コマンド (UI に依存しない)
-  agent = load("agent")
-  worktree = load("worktree")
-  editor = load("editor")
-  links = load("links")
+  -- service/ 下位層: I/O・外部コマンド (UI に依存しない)
+  agent = load("service/agent")
+  worktree = load("service/worktree")
+  editor = load("service/editor")
+  links = load("service/links")
 
-  -- 中位層: 永続化・レイアウト (agent/layout を引数注入し循環回避)
-  workspace = load("workspace/init")
-  workspace.setup(load("workspace/session"))
-  layout = load("layout")
+  -- state/ 中位層: 永続化・レイアウト (agent/layout を引数注入し循環回避)
+  workspace = load("state/workspace/init")
+  workspace.setup(load("state/workspace/session"))
+  layout = load("state/layout")
 
-  -- 上位層: UI・オーケストレーション (deps 経由で下位/中位を呼ぶ)
-  ui = load("ui")
-  selector = load("selector/init")
-  selector.setup(load("selector/workspace"), load("selector/worktree"), load("selector/ui"))
+  -- ui/ 上位層: UI・オーケストレーション (deps 経由で下位/中位を呼ぶ)
+  ui = load("ui/ui")
+  selector = load("ui/selector/init")
+  selector.setup(load("ui/selector/workspace"), load("ui/selector/worktree"), load("ui/selector/ui"))
 
   for _, id in ipairs(enabled_agents or all_agent_ids) do
     local found = false
@@ -67,7 +67,7 @@ local function load_modules(plugin_dir, enabled_agents)
       end
     end
     if not found then error("wezterm-ai-agents: unknown agent '" .. id .. "'. Available: " .. table.concat(all_agent_ids, ", ")) end
-    agent.register(load("agents/" .. id))
+    agent.register(load("service/agents/" .. id))
   end
 end
 
