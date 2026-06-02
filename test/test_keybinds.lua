@@ -14,7 +14,7 @@ local function build_with_opts(opts)
     session_id = function() return nil end,
     spawn_args = function() return {} end,
   })
-  local workspace = H.load_mod("workspace")
+  local workspace = H.load_workspace()
   local layout = H.load_mod("layout")
   local deps = {
     opts = opts,

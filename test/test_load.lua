@@ -7,7 +7,8 @@ H.section("プラグイン初期化")
 test("正常系：全モジュールがエラーなくロードできる", function()
   local modules = {
     "agent",
-    "workspace",
+    "workspace/init",
+    "workspace/session",
     "worktree",
     "layout",
     "ui",

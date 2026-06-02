@@ -20,6 +20,14 @@ function H.load_agent(rel)
   return impl
 end
 
+-- workspace は init(storage+CRUD) と session(snapshot/sync/create) に分割されており、
+-- 本体 init.lua と同じく setup() で結線して単一ファサードにする。
+function H.load_workspace()
+  local workspace = H.load_mod("workspace/init")
+  workspace.setup(H.load_mod("workspace/session"))
+  return workspace
+end
+
 -- Each test runs in its own pcall so failures don't cascade.
 function H.test(name, fn)
   local ok, err = pcall(fn)

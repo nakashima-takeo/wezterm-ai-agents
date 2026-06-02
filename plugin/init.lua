@@ -35,7 +35,8 @@ local all_agent_ids = { "claude", "cursor", "codex", "gemini" }
 
 local function load_modules(plugin_dir, enabled_agents)
   local function load(rel) return dofile(plugin_dir .. "/plugin/" .. rel .. ".lua") end
-  workspace = load("workspace")
+  workspace = load("workspace/init")
+  workspace.setup(load("workspace/session"))
   worktree = load("worktree")
   layout = load("layout")
   selector = load("selector")
