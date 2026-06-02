@@ -115,6 +115,46 @@ test("正常系：unknown状態のペインがカウントされる", function()
   os.execute("rm -rf " .. tmp)
 end)
 
+test("正常系：all_workspaces はWS別に集計し、エージェント未検出ペインは数えない", function()
+  local agent = load_mod("service/agent")
+  local tmp = H.tmp_dir()
+  agent.register(load_mod("service/agents/cursor"))
+
+  -- wsA: working のエージェントペイン + 状態ファイルを持たない (未検出) ペイン
+  local pane_a1 = H.mock_pane("awsA1")
+  local pane_a2 = H.mock_pane("awsA2") -- write_state しない = エージェント未検出
+  H.write_state(tmp, "awsA1", '{"agent":"cursor","state":"working","ts":1716000000,"session_id":""}')
+  -- wsB: waiting のエージェントペイン
+  local pane_b1 = H.mock_pane("awsB1")
+  H.write_state(tmp, "awsB1", '{"agent":"cursor","state":"waiting","ts":1716000000,"session_id":""}')
+
+  local win_a = {
+    get_workspace = function() return "wsA" end,
+    tabs = function()
+      return { { panes = function() return { pane_a1, pane_a2 } end } }
+    end,
+  }
+  local win_b = {
+    get_workspace = function() return "wsB" end,
+    tabs = function()
+      return { { panes = function() return { pane_b1 } end } }
+    end,
+  }
+  local orig = wezterm.mux.all_windows
+  wezterm.mux.all_windows = function() return { win_a, win_b } end
+
+  local result = agent.all_workspaces({ agents = { cursor = { status_dir = tmp } } })
+
+  H.assert_eq(result["wsA"].working, 1)
+  H.assert_eq(result["wsA"].idle, 0) -- 未検出ペインは idle にも他にも数えない
+  H.assert_eq(result["wsA"].unknown, 0)
+  H.assert_eq(result["wsB"].waiting, 1)
+  H.assert_eq(result["wsB"].working, 0)
+
+  wezterm.mux.all_windows = orig
+  os.execute("rm -rf " .. tmp)
+end)
+
 H.section("孤立状態ファイルの掃除 (sweep)")
 
 -- 生存 pane id 群から mock mux を組み、sweep 実行中だけ all_windows を差し替える。
