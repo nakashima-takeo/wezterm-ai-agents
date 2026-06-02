@@ -32,6 +32,13 @@ test("正常系：収まる場合は左パディングで桁を揃える", funct
   H.assert_eq(ui.fixed_width("~/code", 10), "    ~/code")
 end)
 
+test("正常系：全角(CJK)はセル幅2桁で数えてパディングを揃える", function()
+  local ui = load_mod("ui/ui")
+  -- "~/プロジェクト" = ASCII 2 + 全角 6×2 = 14 桁。20 桁なら左に 6 桁ぶんの空白。
+  -- コードポイント数 (8) で数える旧実装だと空白が 12 個になり整列が崩れる。
+  H.assert_eq(ui.fixed_width("~/プロジェクト", 20), string.rep(" ", 6) .. "~/プロジェクト")
+end)
+
 H.section("ステータスバー集計セグメント")
 
 test("正常系：unknown状態がステータスバーに表示される", function()

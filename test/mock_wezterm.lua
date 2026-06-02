@@ -29,6 +29,25 @@ end
 function M.truncate_right(s, n) return (s or ""):sub(1, n) end
 function M.truncate_left(s, n) return (s or ""):sub(-n) end
 
+-- 実 wezterm のセル幅近似。UTF-8 3/4 バイト列 (CJK・絵文字) を全角=2 桁、それ以外を 1 桁とする。
+function M.column_width(s)
+  s = s or ""
+  local w, i = 0, 1
+  while i <= #s do
+    local b = s:byte(i)
+    if b < 0x80 then
+      i, w = i + 1, w + 1
+    elseif b < 0xE0 then
+      i, w = i + 2, w + 1 -- 2 バイト (ラテン拡張等) は 1 桁
+    elseif b < 0xF0 then
+      i, w = i + 3, w + 2 -- 3 バイト (CJK) は 2 桁
+    else
+      i, w = i + 4, w + 2 -- 4 バイト (絵文字等) は 2 桁
+    end
+  end
+  return w
+end
+
 function M.log_info(...) print("[wezterm.log_info]", ...) end
 function M.log_error(...)
   local args = { ... }

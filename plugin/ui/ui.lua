@@ -32,20 +32,14 @@ end
 M.shorten_path = shorten_path
 M.pane_cwd_str = pane_cwd_str
 
-local function display_cols(s)
-  local n = 0
-  for i = 1, #s do
-    local b = s:byte(i)
-    if b < 0x80 or b >= 0xC0 then n = n + 1 end
-  end
-  return n
-end
-
 -- パスを幅 w に収める。前方(祖先)を残して末尾を切り、切った場合は "…" を付す。
 -- 短い場合は左パディングで桁を揃える (エージェント数表示との整列維持)。
+-- 幅は wezterm.column_width で実セル幅を測る (全角は 2 桁)。truncate_right もセル幅基準なので
+-- 閾値・切り出し・パディングの基準が揃い、和文パスでも桁が崩れずオーバーフローもしない。
 local function fixed_width(s, w)
-  if display_cols(s) > w then return wezterm.truncate_right(s, w - 1) .. "…" end
-  return string.rep(" ", w - display_cols(s)) .. s
+  local cols = wezterm.column_width(s)
+  if cols > w then return wezterm.truncate_right(s, w - 1) .. "…" end
+  return string.rep(" ", w - cols) .. s
 end
 
 M.fixed_width = fixed_width
