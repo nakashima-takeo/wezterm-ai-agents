@@ -122,6 +122,8 @@ local default_opts = {
     },
     right_status = {
       fg = "#a6adc8",
+      cwd_width = 20, -- 右ステータスの cwd 表示を固定幅 (桁) に揃える
+      right_status_reserve = 48, -- タブバー幅算出で差し引く右ステータスの占有幅 (桁)
       -- colors: derived from first registered agent at apply() time.
       -- Override here to use custom colors instead of agent defaults.
     },

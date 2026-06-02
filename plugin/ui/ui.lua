@@ -70,7 +70,8 @@ function M.format_tab_title(tab, deps, max_width, num_tabs)
   local full = tab.active_pane.title or ""
 
   local effective_max = max_width or theme.max_chars
-  local reserve = theme.right_status_reserve or 48
+  -- 右ステータスの占有幅。所属は right_status (タブバーと同一行を共有する右ステータスの footprint)。
+  local reserve = deps.opts.ui.right_status.right_status_reserve
   -- タブバーは右ステータスと同一行を共有するため、ウィンドウ全幅から reserve を引いてタブ幅を割り当てる。
   -- format-tab-title は max_width に右ステータス分を含めない値を渡してくるため、ここで自前算出する必要がある。
   local mux_win = tab.window_id and wezterm.mux.get_window(tab.window_id)
@@ -164,7 +165,7 @@ function M.right_status_segments(window, pane, deps)
 
   table.insert(rs, { Foreground = { Color = theme.fg } })
   table.insert(rs, {
-    Text = "  " .. fixed_width(pane_cwd_str(pane), theme.cwd_width or 20) .. "  |  " .. window:active_workspace() .. "  ",
+    Text = "  " .. fixed_width(pane_cwd_str(pane), theme.cwd_width) .. "  |  " .. window:active_workspace() .. "  ",
   })
   return rs
 end
