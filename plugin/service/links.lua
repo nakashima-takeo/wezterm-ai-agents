@@ -25,13 +25,11 @@ function M.rules()
 end
 
 -- 末尾の行/列指定を切り出す。戻り値: path, line(number|nil), col(number|nil)。
--- 対応形式: path:line:col / path:line / path#line
+-- 対応形式: path:line:col / path:line (rules() の正規表現が捕捉する形式に対応)
 function M.parse_target(s)
   local f, l, c = s:match("^(.+):(%d+):(%d+)$")
   if f then return f, tonumber(l), tonumber(c) end
   f, l = s:match("^(.+):(%d+)$")
-  if f then return f, tonumber(l), nil end
-  f, l = s:match("^(.+)#(%d+)$")
   if f then return f, tonumber(l), nil end
   return s, nil, nil
 end

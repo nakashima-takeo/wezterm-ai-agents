@@ -21,13 +21,6 @@ test("path:line を分解する (列なし)", function()
   H.assert_nil(c)
 end)
 
-test("path#line を分解する", function()
-  local f, l, c = links.parse_target("docs/readme.md#42")
-  H.assert_eq(f, "docs/readme.md")
-  H.assert_eq(l, 42)
-  H.assert_nil(c)
-end)
-
 test("行指定なしはパスのみ返す", function()
   local f, l, c = links.parse_target("src/main.rs")
   H.assert_eq(f, "src/main.rs")
