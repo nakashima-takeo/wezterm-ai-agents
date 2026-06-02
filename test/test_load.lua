@@ -5,27 +5,9 @@ local test, load_mod = H.test, H.load_mod
 H.section("プラグイン初期化")
 
 test("正常系：全モジュールがエラーなくロードできる", function()
-  local modules = {
-    "resource/labels",
-    "resource/icons",
-    "service/agent",
-    "service/worktree/init",
-    "service/worktree/github",
-    "service/editor",
-    "service/links",
-    "state/workspace/init",
-    "state/workspace/session",
-    "state/layout",
-    "ui/ui",
-    "ui/selector/init",
-    "ui/selector/workspace",
-    "ui/selector/worktree",
-    "ui/selector/ui",
-    "service/agents/claude",
-    "service/agents/codex",
-    "service/agents/cursor",
-    "service/agents/gemini",
-  }
+  -- plugin/ 配下を find で自動発見してロードする (手動リスト無し)。新モジュールも自動でこの検査の対象になる。
+  local modules = H.all_modules()
+  H.assert_true(#modules > 0, "モジュールが1つも発見できていない (find 失敗?)") -- 空ループで素通りするのを防ぐ
   for _, name in ipairs(modules) do
     local ok, err = pcall(load_mod, name)
     if not ok then error("load " .. name .. " failed: " .. tostring(err)) end
