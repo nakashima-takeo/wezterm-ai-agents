@@ -305,7 +305,7 @@ function M.add_pr_worktree(git_root, number, opts)
   wezterm.run_child_process({ "git", "-C", git_root, "config", ("branch.%s.merge"):format(branch), ("refs/pull/%d/head"):format(number) })
   local template = (opts and opts.worktree and opts.worktree.path) or "sibling"
   local wt_path = core.resolve_path(template, git_root, branch)
-  local ok2, _, stderr2 = wezterm.run_child_process({ "git", "-C", git_root, "worktree", "add", wt_path, branch })
+  local ok2, _, stderr2 = wezterm.run_child_process({ "git", "-C", git_root, "worktree", "add", "--", wt_path, branch })
   return ok2, wt_path, stderr2
 end
 
@@ -323,7 +323,7 @@ function M.add_issue_worktree(git_root, number, opts)
   local template = (opts and opts.worktree and opts.worktree.path) or "sibling"
   local wt_path = core.resolve_path(template, git_root, branch)
   local ok2, _, stderr2 =
-    wezterm.run_child_process({ "git", "-C", git_root, "worktree", "add", "--track", "-b", branch, wt_path, "origin/" .. branch })
+    wezterm.run_child_process({ "git", "-C", git_root, "worktree", "add", "--track", "-b", branch, "--", wt_path, "origin/" .. branch })
   return ok2, wt_path, stderr2
 end
 

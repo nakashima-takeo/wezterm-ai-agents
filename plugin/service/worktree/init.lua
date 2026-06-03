@@ -132,16 +132,24 @@ function M.workspace_name_for(base_ws, branch, is_main)
   return base_ws .. "/" .. branch
 end
 
+-- 位置引数は "--" で守れるが、-b に渡るブランチ名はオプション値のため "--" の後ろに置けない。
+-- 外部リモート由来の先頭ハイフン名 (refs/remotes/origin/-x 等) が git のオプションとして
+-- 解釈されるのを防ぐため、-b に渡る名前は先頭ハイフンを拒否する。
+local function leading_hyphen(name) return type(name) == "string" and name:match("^%-") ~= nil end
+
 function M.add(git_root, branch, local_name, is_new_branch, opts)
+  if leading_hyphen(branch) or leading_hyphen(local_name) then
+    return false, nil, "invalid branch name (leading hyphen): " .. tostring(local_name or branch)
+  end
   local template = (opts and opts.worktree and opts.worktree.path) or "sibling"
   local wt_path = M.resolve_path(template, git_root, local_name or branch)
   local ok, _, stderr
   if is_new_branch then
-    ok, _, stderr = wezterm.run_child_process({ "git", "-C", git_root, "worktree", "add", "-b", branch, wt_path })
+    ok, _, stderr = wezterm.run_child_process({ "git", "-C", git_root, "worktree", "add", "-b", branch, "--", wt_path })
   elseif local_name and local_name ~= branch then
-    ok, _, stderr = wezterm.run_child_process({ "git", "-C", git_root, "worktree", "add", "-b", local_name, wt_path, branch })
+    ok, _, stderr = wezterm.run_child_process({ "git", "-C", git_root, "worktree", "add", "-b", local_name, "--", wt_path, branch })
   else
-    ok, _, stderr = wezterm.run_child_process({ "git", "-C", git_root, "worktree", "add", wt_path, branch })
+    ok, _, stderr = wezterm.run_child_process({ "git", "-C", git_root, "worktree", "add", "--", wt_path, branch })
   end
   return ok, wt_path, stderr
 end
@@ -149,6 +157,7 @@ end
 function M.remove(git_root, wt_path, force)
   local args = { "git", "-C", git_root, "worktree", "remove" }
   if force then table.insert(args, "--force") end
+  table.insert(args, "--")
   table.insert(args, wt_path)
   return wezterm.run_child_process(args)
 end
