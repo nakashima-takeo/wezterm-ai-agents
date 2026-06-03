@@ -324,7 +324,13 @@ test("正常系：変更がなければJSONファイルを書き込まない", f
     },
   })
 
-  local stat_before = io.popen("stat -f %m " .. ws_opts.file):read("*l")
+  -- write をラップして sync_all 中の書き込み回数を観測する (mtime 秒精度・OS依存の偽陰性を排除)
+  local write_calls = 0
+  local real_write = workspace.write
+  workspace.write = function(...)
+    write_calls = write_calls + 1
+    return real_write(...)
+  end
 
   local mock_win = {
     get_workspace = function() return "my-project" end,
@@ -338,9 +344,9 @@ test("正常系：変更がなければJSONファイルを書き込まない", f
   workspace.sync_all(ws_opts, agent_mod, no_layout, {})
 
   wezterm.mux.all_windows = original
+  workspace.write = real_write
 
-  local stat_after = io.popen("stat -f %m " .. ws_opts.file):read("*l")
-  H.assert_eq(stat_before, stat_after, "file should not be rewritten when nothing changed")
+  H.assert_eq(write_calls, 0, "変更がなければ write は呼ばれない")
 
   os.execute("rm -rf " .. tmp)
 end)

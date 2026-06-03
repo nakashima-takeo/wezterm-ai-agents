@@ -118,4 +118,57 @@ test("正常系：nilや空のレイアウトでは分割しない", function()
   H.assert_eq(#root._splits, 0)
 end)
 
+H.section("レイアウト snapshot→apply 往復")
+
+test("正常系：縦横混在3ペインを往復しても元の分割木が再現される", function()
+  -- +------+------+   p0 左, p1 右上, p2 右下
+  -- |      |  p1  |
+  -- |  p0  +------+
+  -- |      |  p2  |
+  -- +------+------+
+  local layout = load_mod("state/layout")
+  local tab = mock_tab({
+    { top = 0, left = 0, width = 40, height = 24 },
+    { top = 0, left = 41, width = 40, height = 12 },
+    { top = 13, left = 41, width = 40, height = 12 },
+  })
+
+  local snap = layout.snapshot(tab)
+  local root = mock_splittable_pane("root")
+  layout.apply(root, snap, "/tmp")
+
+  -- snapshot の pane インデックスと apply の親参照体系が一致して初めてこの木になる:
+  -- root を Right 分割→child1、child1 を Bottom 分割→child2。
+  H.assert_eq(#root._splits, 1)
+  H.assert_eq(root._splits[1].direction, "Right")
+  local child1 = root._splits[1].child
+  H.assert_eq(#child1._splits, 1)
+  H.assert_eq(child1._splits[1].direction, "Bottom")
+  -- 末端 (child2) はそれ以上分割されない
+  H.assert_eq(#child1._splits[1].child._splits, 0)
+end)
+
+test("正常系：直列の右分割3ペインを往復しても親参照がずれない", function()
+  -- +------+------+------+   p0 | p1 | p2 (すべて右隣)
+  -- |  p0  |  p1  |  p2  |
+  -- +------+------+------+
+  local layout = load_mod("state/layout")
+  local tab = mock_tab({
+    { top = 0, left = 0, width = 40, height = 24 },
+    { top = 0, left = 41, width = 40, height = 24 },
+    { top = 0, left = 82, width = 40, height = 24 },
+  })
+
+  local snap = layout.snapshot(tab)
+  local root = mock_splittable_pane("root")
+  layout.apply(root, snap, "/tmp")
+
+  -- root→Right→child1、child1→Right→child2 (p2 は p1 の右なので親は child1)
+  H.assert_eq(#root._splits, 1)
+  H.assert_eq(root._splits[1].direction, "Right")
+  local child1 = root._splits[1].child
+  H.assert_eq(#child1._splits, 1)
+  H.assert_eq(child1._splits[1].direction, "Right")
+end)
+
 H.finish()
