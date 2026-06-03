@@ -347,10 +347,9 @@ end)
 test("pull_requestsはキャッシュからheadRefName→{number,state}のmapを返す", function()
   local worktree = H.load_worktree()
   local git_root = "/tmp/__wt_pr_map_test"
-  -- worktree.lua の cache_base() と同一規則。新基底が不在だと H.write_file が落ちるため mkdir -p する。
-  local dir = (os.getenv("XDG_STATE_HOME") or (wezterm.home_dir .. "/.local/state")) .. "/wezterm-ai-agents"
-  os.execute("mkdir -p '" .. dir .. "'")
-  local cache = dir .. "/wezterm-pr-" .. git_root:gsub("[^%w]", "_") .. ".json"
+  -- パス導出は production の公開関数を使う (キー規則の二重管理を避ける)。base 不在だと write が落ちるため mkdir -p。
+  local cache = worktree.pr_cache_file(git_root)
+  os.execute("mkdir -p '" .. cache:match("^(.*)/[^/]+$") .. "'")
   H.write_file(cache, '[{"number":7,"headRefName":"feat/a","state":"OPEN","isCrossRepository":false}]')
 
   local map = worktree.pull_requests(git_root)
@@ -379,9 +378,8 @@ end)
 test("pull_requestsはconfig刻印でブランチ名非依存に紐づける", function()
   local worktree = H.load_worktree()
   local git_root = "/tmp/__wt_pr_cfg_test"
-  local dir = (os.getenv("XDG_STATE_HOME") or (wezterm.home_dir .. "/.local/state")) .. "/wezterm-ai-agents"
-  os.execute("mkdir -p '" .. dir .. "'")
-  local cache = dir .. "/wezterm-pr-" .. git_root:gsub("[^%w]", "_") .. ".json"
+  local cache = worktree.pr_cache_file(git_root)
+  os.execute("mkdir -p '" .. cache:match("^(.*)/[^/]+$") .. "'")
   H.write_file(cache, '[{"number":12,"headRefName":"feat/fork","state":"OPEN","isCrossRepository":true}]')
   local original = wezterm.run_child_process
   wezterm.run_child_process = function() return true, "branch.renamed.merge refs/pull/12/head\n" end
@@ -623,9 +621,8 @@ end)
 test("issues：linkedBranchesを反転してbranch→番号マップを返す", function()
   local worktree = H.load_worktree()
   local git_root = "/tmp/__wt_issue_map_test"
-  local dir = (os.getenv("XDG_STATE_HOME") or (wezterm.home_dir .. "/.local/state")) .. "/wezterm-ai-agents"
-  os.execute("mkdir -p '" .. dir .. "'")
-  local cache = dir .. "/wezterm-issue-" .. git_root:gsub("[^%w]", "_") .. ".json"
+  local cache = worktree.issue_cache_file(git_root)
+  os.execute("mkdir -p '" .. cache:match("^(.*)/[^/]+$") .. "'")
   H.write_file(
     cache,
     issue_graphql('[{"number":12,"title":"x","assignees":{"nodes":[]},"linkedBranches":{"nodes":[{"ref":{"name":"my-fix"}}]}}]')

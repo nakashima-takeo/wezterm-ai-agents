@@ -23,9 +23,21 @@ local function cache_base()
   return base .. "/wezterm-ai-agents"
 end
 
-local function pr_cache_file(git_root) return cache_base() .. "/wezterm-pr-" .. git_root:gsub("[^%w]", "_") .. ".json" end
+-- gsub("[^%w]","_") は非単射 (/a/b-c と /a/b_c が同一キーへ衝突) で別リポのキャッシュが混線する。
+-- 末尾セグメント (可読性) + 全パスの 32bit ハッシュ (単射性担保) でキーを構成する。
+local function cache_key(git_root)
+  local h = 5381
+  for i = 1, #git_root do
+    h = (h * 33 + git_root:byte(i)) % 0x100000000
+  end
+  local seg = (git_root:match("([^/]+)$") or "repo"):gsub("[^%w]", "_")
+  return seg .. "-" .. string.format("%08x", h)
+end
 
-local function issue_cache_file(git_root) return cache_base() .. "/wezterm-issue-" .. git_root:gsub("[^%w]", "_") .. ".json" end
+-- キャッシュファイルパス。production とテストがキー規則を二重管理しないよう公開する。
+function M.pr_cache_file(git_root) return cache_base() .. "/wezterm-pr-" .. cache_key(git_root) .. ".json" end
+
+function M.issue_cache_file(git_root) return cache_base() .. "/wezterm-issue-" .. cache_key(git_root) .. ".json" end
 
 -- 自分の login キャッシュ。Issue の assignee 強調用 (リポジトリ非依存なので 1 ファイルに集約)。
 local function gh_user_cache_file() return cache_base() .. "/wezterm-gh-user" end
@@ -62,8 +74,8 @@ end
 -- gh の結果はキャッシュファイルへ書き出し、worktree 画面はそれを読むだけにする。
 function M.prefetch(git_root)
   wezterm.background_child_process({ "git", "-C", git_root, "fetch", "--prune" })
-  wezterm.background_child_process({ "/bin/sh", "-lc", bg_cache_cmd(git_root, GH_PR_LIST, pr_cache_file(git_root)) })
-  wezterm.background_child_process({ "/bin/sh", "-lc", bg_cache_cmd(git_root, GH_ISSUE_LIST, issue_cache_file(git_root)) })
+  wezterm.background_child_process({ "/bin/sh", "-lc", bg_cache_cmd(git_root, GH_PR_LIST, M.pr_cache_file(git_root)) })
+  wezterm.background_child_process({ "/bin/sh", "-lc", bg_cache_cmd(git_root, GH_ISSUE_LIST, M.issue_cache_file(git_root)) })
   -- 自分の login (assignee 強調用、無ければ取得)。
   local login = shq(gh_user_cache_file())
   local user_cmd = ("mkdir -p %s && { test -s %s || gh api user --jq .login > %s 2>/dev/null; }"):format(shq(cache_base()), login, login)
@@ -84,9 +96,9 @@ local function refresh_cache(git_root, list_cmd, cache)
 end
 
 -- 手動 fetch 用。gh を同期実行してキャッシュを即時更新する。
-function M.refresh_pr_cache(git_root) refresh_cache(git_root, GH_PR_LIST, pr_cache_file(git_root)) end
+function M.refresh_pr_cache(git_root) refresh_cache(git_root, GH_PR_LIST, M.pr_cache_file(git_root)) end
 
-function M.refresh_issue_cache(git_root) refresh_cache(git_root, GH_ISSUE_LIST, issue_cache_file(git_root)) end
+function M.refresh_issue_cache(git_root) refresh_cache(git_root, GH_ISSUE_LIST, M.issue_cache_file(git_root)) end
 
 -- 生 JSON を正規化した配列 [{ number, headRefName, state, fork, owner, author, review_requests }] に変換する純関数。
 function M.parse_pr_list(raw)
@@ -125,7 +137,7 @@ local function read_file(path)
 end
 
 -- キャッシュから open PR の配列を返す。
-function M.pull_request_list(git_root) return M.parse_pr_list(read_file(pr_cache_file(git_root))) end
+function M.pull_request_list(git_root) return M.parse_pr_list(read_file(M.pr_cache_file(git_root))) end
 
 -- GraphQL 生 JSON を [{ number, title, assignees={login,...}, linked_branches={name,...} }] に変換する純関数。
 function M.parse_issue_list(raw)
@@ -159,7 +171,7 @@ function M.parse_issue_list(raw)
 end
 
 -- キャッシュから open Issue の配列を返す。
-function M.issue_list(git_root) return M.parse_issue_list(read_file(issue_cache_file(git_root))) end
+function M.issue_list(git_root) return M.parse_issue_list(read_file(M.issue_cache_file(git_root))) end
 
 -- linkedBranches を反転した { [branch] = number } マップを返す。worktree/branch のバッジ表示用。
 function M.issues(git_root)
