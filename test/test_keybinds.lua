@@ -238,4 +238,115 @@ test("nerd_font=false は OS 非依存で Unicode 記号 (表示順 ⌃⌥⇧⌘
   H.assert_eq(ui.format_keybind("S", "CMD|SHIFT", false), U_SHIFT .. " " .. U_CMD .. " S")
 end)
 
+H.section("セレクタ選択ロジック (InputSelector 内側 callback)")
+
+-- 共通の opts/deps を組む。create を spy で差し替えて実 spawn を避ける。
+local function selector_env()
+  local selector = H.load_selector()
+  local agent = H.load_mod("service/agent")
+  agent.register({
+    id = "test",
+    display_name = "T",
+    default_opts = {},
+    detect = function() return false end,
+    state = function() return "idle" end,
+    session_id = function() return nil end,
+    spawn_args = function() return {} end,
+  })
+  local ws_file = H.tmp_dir() .. "/ws.json"
+  H.write_file(ws_file, '{"workspaces":[{"name":"demo","cwd":"/tmp"}]}')
+  local labels = H.load_mod("resource/labels")
+  local opts = {
+    labels = labels.en,
+    workspace = { file = ws_file, default_workspace = "default" },
+    ui = { right_status = { colors = {}, icons = { idle = "i" } } },
+    icons = { folder = "F" },
+    nerd_font = false,
+    default_tabs = { {} },
+    modifier_prefix = "CMD",
+    disabled_keybinds = {},
+    keybinds = {},
+  }
+  local deps = { opts = opts, agent = agent, workspace = H.load_workspace(), layout = H.load_mod("state/layout") }
+  return selector, deps
+end
+
+test("正常系：pin_toggle を2回踏むと pinned_windows が true→nil とトグルする", function()
+  local selector, deps = selector_env()
+  local keys = selector.build_keybinds(deps)
+  local pin = find_by_action_key(keys, "P")
+  H.assert_not_nil(pin, "pin_toggle keybind should exist")
+
+  local window = { perform_action = function() end, toast_notification = function() end, window_id = function() return 42 end }
+  local id = "42"
+
+  pin.action.__callback(window, {})
+  H.assert_true(selector.pinned_windows[id] == true, "1回目で pin される")
+  pin.action.__callback(window, {})
+  H.assert_nil(selector.pinned_windows[id], "2回目で pin 解除される")
+end)
+
+-- InputSelector をキャプチャし、内側 callback の perform_action を記録する window を作る。
+local function capturing_window()
+  local actions = {}
+  local captured
+  local window = {
+    perform_action = function(_, action)
+      if type(action) == "table" and action.__action == "InputSelector" then
+        captured = action.arg
+      else
+        table.insert(actions, action)
+      end
+    end,
+    toast_notification = function() end,
+    window_id = function() return 1 end,
+    active_workspace = function() return "default" end,
+  }
+  return window, function() return captured end, actions
+end
+
+test("正常系：workspace_selector で未起動 ws:demo を選ぶと create + SwitchToWorkspace が走る", function()
+  local selector, deps = selector_env()
+
+  -- create を spy (実 spawn を避ける)
+  local created
+  deps.workspace.create = function(cfg) created = cfg and cfg.name end
+
+  local keys = selector.build_keybinds(deps)
+  local s = find_by_action_key(keys, "S") -- workspace_selector
+  H.assert_not_nil(s, "workspace_selector keybind should exist")
+
+  local window, get_captured, actions = capturing_window()
+  local pane = { get_current_working_dir = function() return nil end }
+
+  s.action.__callback(window, pane) -- セレクタを開く (InputSelector をキャプチャ)
+  local captured = get_captured()
+  H.assert_not_nil(captured, "InputSelector が発行される")
+
+  -- 内側 callback を id="ws:demo" で起動 (= 実際の選択処理)
+  captured.action.__callback(window, pane, "ws:demo")
+
+  H.assert_eq(created, "demo", "未起動WSの選択で create が呼ばれる")
+  local switched
+  for _, a in ipairs(actions) do
+    if type(a) == "table" and a.__action == "SwitchToWorkspace" then switched = a.arg.name end
+  end
+  H.assert_eq(switched, "demo", "create 後に当該WSへ SwitchToWorkspace する")
+end)
+
+test("正常系：InputSelector の内側 callback は id=nil / 区切り行で何もしない", function()
+  local selector, deps = selector_env()
+  local keys = selector.build_keybinds(deps)
+  local s = find_by_action_key(keys, "S")
+
+  local window, get_captured = capturing_window()
+  local pane = { get_current_working_dir = function() return nil end }
+
+  s.action.__callback(window, pane)
+  local captured = get_captured()
+  -- nil / 区切り行は早期 return (nil 参照やクラッシュしないこと)
+  captured.action.__callback(window, pane, nil)
+  captured.action.__callback(window, pane, "_sep_actions")
+end)
+
 H.finish()
