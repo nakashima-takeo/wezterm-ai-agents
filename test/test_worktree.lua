@@ -198,6 +198,85 @@ test("異常系：gitコマンド失敗時は空リストを返す", function()
   H.assert_eq(#trees, 0)
 end)
 
+H.section("get_git_rootの二段フォールバック")
+
+test("正常系：git-common-dir が /repo/.git を返すと /.git を剥がして /repo を返す", function()
+  local worktree = H.load_worktree()
+  local original = wezterm.run_child_process
+  wezterm.run_child_process = function(args)
+    for _, a in ipairs(args) do
+      if a == "--git-common-dir" then return true, "/home/user/repo/.git\n" end
+    end
+    return false, nil
+  end
+
+  local root = worktree.get_git_root("/home/user/repo/.worktrees/x")
+
+  wezterm.run_child_process = original
+  H.assert_eq(root, "/home/user/repo")
+end)
+
+test("正常系：git-common-dir 失敗時は show-toplevel にフォールバックする", function()
+  local worktree = H.load_worktree()
+  local original = wezterm.run_child_process
+  wezterm.run_child_process = function(args)
+    for _, a in ipairs(args) do
+      if a == "--git-common-dir" then return false, nil end
+      if a == "--show-toplevel" then return true, "/home/user/repo\n" end
+    end
+    return false, nil
+  end
+
+  local root = worktree.get_git_root("/dummy")
+
+  wezterm.run_child_process = original
+  H.assert_eq(root, "/home/user/repo")
+end)
+
+test("異常系：両方失敗時は nil を返す", function()
+  local worktree = H.load_worktree()
+  local original = wezterm.run_child_process
+  wezterm.run_child_process = function() return false, nil end
+
+  local root = worktree.get_git_root("/dummy")
+
+  wezterm.run_child_process = original
+  H.assert_nil(root)
+end)
+
+H.section("branchesの収集と重複排除")
+
+test(
+  "正常系：使用中ブランチ除外・リモート専用のみ抽出・origin/HEAD除外・ローカル同名重複排除",
+  function()
+    local worktree = H.load_worktree()
+    local original = wezterm.run_child_process
+    -- `-r` の有無でローカル/リモートの出力を出し分ける
+    wezterm.run_child_process = function(args)
+      for _, a in ipairs(args) do
+        if a == "-r" then return true, "origin/HEAD\norigin/main\norigin/dev\norigin/release\n" end
+      end
+      return true, "main\nfeature-x\ndev\n"
+    end
+
+    -- feature-x は worktree 使用中
+    local result = worktree.branches("/dummy", { { branch = "feature-x" } })
+
+    wezterm.run_child_process = original
+
+    -- ローカル: 使用中の feature-x を除外し main/dev のみ
+    H.assert_eq(#result.local_branches, 2)
+    H.assert_eq(result.local_branches[1], "main")
+    H.assert_eq(result.local_branches[2], "dev")
+
+    -- リモート: origin/HEAD は除外、origin/main・origin/dev はローカル同名で重複排除、
+    -- リモート専用の origin/release だけ残る
+    H.assert_eq(#result.remote_branches, 1)
+    H.assert_eq(result.remote_branches[1].display, "origin/release")
+    H.assert_eq(result.remote_branches[1].local_name, "release")
+  end
+)
+
 H.section("一時ブランチ名")
 
 test("正常系：派生元ブランチ名を含むtmp/プレフィックスで日時形式の名前を生成する", function()
@@ -426,6 +505,38 @@ test("open_pr_web：gh pr view --web をログインシェルで投げる", func
   H.assert_match(captured[3], "gh pr view %-%-web 12")
   H.assert_match(captured[3], "/home/user/repo")
 end)
+
+test(
+  "prefetch：PRキャッシュコマンドが mkdir -p 前置・アトミック書き出し・gh フィールド列を含む",
+  function()
+    local worktree = H.load_worktree()
+    local cmds = {}
+    local original = wezterm.background_child_process
+    wezterm.background_child_process = function(args)
+      if args[1] == "/bin/sh" then table.insert(cmds, args[3]) end
+    end
+
+    worktree.prefetch("/home/user/repo")
+
+    wezterm.background_child_process = original
+
+    -- PR キャッシュ書き出しコマンド (gh pr list を含むもの) を特定
+    local pr_cmd
+    for _, c in ipairs(cmds) do
+      if c:match("gh pr list") then pr_cmd = c end
+    end
+    H.assert_true(pr_cmd ~= nil)
+    -- base 不在でもリダイレクトが失敗しないための mkdir -p 前置 (回帰しやすい不変条件)
+    H.assert_match(pr_cmd, "^mkdir %-p ")
+    H.assert_match(pr_cmd, "wezterm%-pr%-")
+    -- tmp へ書いてから mv するアトミック書き出し
+    H.assert_match(pr_cmd, "%.tmp")
+    H.assert_match(pr_cmd, "&& mv ")
+    -- gh の --json フィールド列が落ちていないこと
+    H.assert_match(pr_cmd, "headRefName")
+    H.assert_match(pr_cmd, "reviewRequests")
+  end
+)
 
 H.section("Issueリストのパース")
 
