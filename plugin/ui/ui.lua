@@ -32,17 +32,16 @@ end
 M.shorten_path = shorten_path
 M.pane_cwd_str = pane_cwd_str
 
--- パスを幅 w に収める。前方(祖先)を残して末尾を切り、切った場合は "…" を付す。
--- 短い場合は左パディングで桁を揃える (エージェント数表示との整列維持)。
+-- パスを最大幅 w に収める。w を超える場合のみ前方(祖先)を残して末尾を切り "…" を付す。
+-- w 以下はそのまま返し左パディングしないため、短いパスでは右ステータス全体が右端へ詰まる。
 -- 幅は wezterm.column_width で実セル幅を測る (全角は 2 桁)。truncate_right もセル幅基準なので
--- 閾値・切り出し・パディングの基準が揃い、和文パスでも桁が崩れずオーバーフローもしない。
-local function fixed_width(s, w)
-  local cols = wezterm.column_width(s)
-  if cols > w then return wezterm.truncate_right(s, w - 1) .. "…" end
-  return string.rep(" ", w - cols) .. s
+-- 閾値・切り出しの基準が揃い、和文パスでも桁が崩れずオーバーフローもしない。
+local function truncate_cwd(s, w)
+  if wezterm.column_width(s) > w then return wezterm.truncate_right(s, w - 1) .. "…" end
+  return s
 end
 
-M.fixed_width = fixed_width
+M.truncate_cwd = truncate_cwd
 
 -- ============== Tab title ==============
 
@@ -164,7 +163,7 @@ function M.right_status_segments(window, pane, deps)
 
   table.insert(rs, { Foreground = { Color = theme.fg } })
   table.insert(rs, {
-    Text = "  " .. fixed_width(pane_cwd_str(pane), theme.cwd_width) .. "  |  " .. window:active_workspace() .. "  ",
+    Text = "  " .. truncate_cwd(pane_cwd_str(pane), theme.cwd_width) .. "  |  " .. window:active_workspace() .. "  ",
   })
   return rs
 end

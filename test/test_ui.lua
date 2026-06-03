@@ -20,23 +20,22 @@ test("正常系：省略不要なパスはそのまま返す", function()
   H.assert_eq(ui.shorten_path(""), "")
 end)
 
-H.section("ステータスバー用パス幅収め (fixed_width)")
+H.section("ステータスバー用パス幅収め (truncate_cwd)")
 
 test("正常系：超過時は前方(祖先)を残し末尾を切って … を付す", function()
   local ui = load_mod("ui/ui")
-  H.assert_eq(ui.fixed_width("~/g/wezterm-ai-agents", 20), "~/g/wezterm-ai-agen…")
+  H.assert_eq(ui.truncate_cwd("~/g/wezterm-ai-agents", 20), "~/g/wezterm-ai-agen…")
 end)
 
-test("正常系：収まる場合は左パディングで桁を揃える", function()
+test("正常系：収まる場合はパディングせずそのまま返す (短いパスは右へ詰まる)", function()
   local ui = load_mod("ui/ui")
-  H.assert_eq(ui.fixed_width("~/code", 10), "    ~/code")
+  H.assert_eq(ui.truncate_cwd("~/code", 10), "~/code")
 end)
 
-test("正常系：全角(CJK)はセル幅2桁で数えてパディングを揃える", function()
+test("正常系：全角(CJK)が収まる場合もパディングせずそのまま返す", function()
   local ui = load_mod("ui/ui")
-  -- "~/プロジェクト" = ASCII 2 + 全角 6×2 = 14 桁。20 桁なら左に 6 桁ぶんの空白。
-  -- コードポイント数 (8) で数える旧実装だと空白が 12 個になり整列が崩れる。
-  H.assert_eq(ui.fixed_width("~/プロジェクト", 20), string.rep(" ", 6) .. "~/プロジェクト")
+  -- "~/プロジェクト" = ASCII 2 + 全角 6×2 = 14 桁 ≤ 20 なので無加工。
+  H.assert_eq(ui.truncate_cwd("~/プロジェクト", 20), "~/プロジェクト")
 end)
 
 test(
@@ -46,9 +45,9 @@ test(
     -- "~/プロジェクト管理システム" = ASCII 2 + 全角 12×2 = 26 桁 > 20。
     -- truncate_right(s, 19) は 18 桁(~/ + 全角8) で止まり、+ "…" で 19 桁に収まる。
     -- バイト基準で切ると全角の途中で割れて壊れた UTF-8 になり、結果も桁も崩れる。
-    H.assert_eq(ui.fixed_width("~/プロジェクト管理システム", 20), "~/プロジェクト管理…")
+    H.assert_eq(ui.truncate_cwd("~/プロジェクト管理システム", 20), "~/プロジェクト管理…")
     -- fix の主張 (オーバーフローしない) を直接検証: 結果のセル幅は必ず w 以下。
-    H.assert_eq(wezterm.column_width(ui.fixed_width("~/プロジェクト管理システム", 20)) <= 20, true)
+    H.assert_eq(wezterm.column_width(ui.truncate_cwd("~/プロジェクト管理システム", 20)) <= 20, true)
   end
 )
 
