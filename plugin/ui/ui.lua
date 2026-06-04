@@ -148,6 +148,17 @@ function M.right_status_segments(window, pane, deps)
     table.insert(rs, { Text = "  " .. (theme.pin_icon or "") })
   end
 
+  -- 未解消の失敗を常駐警告として出す (toast が出ない環境でもここで気づける)。文言は短く、左切り詰めに備えて先頭側に置く。
+  if deps.diagnostics then
+    local warns = deps.diagnostics.active()
+    if #warns > 0 then
+      local label = warns[1]
+      if #warns > 1 then label = label .. " (+" .. (#warns - 1) .. ")" end
+      table.insert(rs, { Foreground = { Color = theme.colors.error or "#ef4444" } })
+      table.insert(rs, { Text = "  " .. (theme.icons.error or "!") .. " " .. label })
+    end
+  end
+
   if opts.right_status_extra and type(opts.right_status_extra) == "function" then
     local extras = opts.right_status_extra(window, pane, deps)
     if type(extras) == "table" then

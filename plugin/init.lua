@@ -29,7 +29,7 @@ local function detect_plugin_dir(user_dir)
   error("wezterm-ai-agents: plugin_dir not detected. Pass opts.plugin_dir or load via wezterm.plugin.require.")
 end
 
-local workspace, worktree, layout, selector, agent, ui, builtin_labels, builtin_icons, editor, links
+local workspace, worktree, layout, selector, agent, ui, builtin_labels, builtin_icons, editor, links, diagnostics
 
 local all_agent_ids = { "claude", "cursor", "codex", "gemini" }
 
@@ -43,6 +43,7 @@ local function load_modules(plugin_dir, enabled_agents)
   builtin_icons = load("resource/icons")
 
   -- service/ 下位層: I/O・外部コマンド (UI に依存しない)
+  diagnostics = load("service/diagnostics")
   agent = load("service/agent")
   worktree = load("service/worktree/init")
   worktree.setup(load("service/worktree/github"))
@@ -254,6 +255,7 @@ function M.apply(config, user_opts)
     agent = agent,
     ui = ui,
     editor = editor,
+    diagnostics = diagnostics,
     opts = opts,
   }
   M.deps = deps
@@ -343,6 +345,9 @@ function M.apply(config, user_opts)
       prev_pane_id[win_id] = pane_id
       if focus_changed or (now - last_status_tick) >= opts.status_update_interval then
         last_status_tick = now
+        -- 知らせるべき失敗 (window 不在の経路で溜まった分) を、window がある今 toast で一度だけ出す。
+        local pendings = diagnostics.take_pending()
+        if #pendings > 0 then window:toast_notification("wezterm-ai-agents", table.concat(pendings, "\n"), nil, 8000) end
         local impl, agent_opts = agent.detect(pane, opts)
         if impl and impl.consume_done then pcall(impl.consume_done, pane, agent_opts) end
         local segs = ui.right_status_segments(window, pane, deps)
