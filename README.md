@@ -79,10 +79,22 @@ ai.apply(config, { plugin_dir = plugin_dir })
 
 ## Hooks設定
 
-エージェント状態の検知には、プラグイン同梱の `hooks/agent_status.sh` をエージェント側のhooksに設定する必要があります。
+エージェント状態の検知には、各エージェントの設定ファイルに同梱スクリプト `hooks/agent_status.sh` を登録します。**既定 (`install_hooks = true`) では、WezTerm 起動時に各エージェントの設定ファイルへ自動でマージされます**（`jq` が必要）。通常は何もする必要はありません。
+
+自動設定の挙動:
+
+- 既存の設定は壊しません。自分のエントリだけを冪等に追加・更新し、他のフックや設定キーは保持します。変更があったファイルは `.bak` を残します。
+- 設定ファイルが **symlink**（dotfiles 管理など）の場合はスキップします。その場合は後述の手動設定を使ってください。
+- `jq` が無い・既存ファイルが不正な JSON の場合はスキップします。`jq` が無く自動設定できなかった場合は起動時に通知します。
+- `install_hooks = false` で自動設定を無効化できます。
+
 スクリプトは状態をJSONとして `$XDG_STATE_HOME/wezterm-ai-agents/<gui_pid>/wezterm-agent-<pane_id>`（`$XDG_STATE_HOME` 未設定時は `~/.local/state/wezterm-ai-agents`）に書き込み、プラグインが定期的に読み取ります。`<gui_pid>` は GUI プロセスごとの名前空間で、複数の WezTerm を同時起動しても状態が混ざらないようにするものです。
 
 > 状態検知は GUI プロセスが mux を内蔵する既定構成を前提とします。mux サーバを別プロセスで常駐させ `wezterm connect` で接続する分離構成・リモート多重化はサポート対象外です。
+
+## 手動でのHooks設定
+
+symlink で管理している・`jq` が無い・`install_hooks = false` にしたなどで自動設定を使わない場合は、以下の手順で手動設定します。
 
 ### hooks パスの確認
 

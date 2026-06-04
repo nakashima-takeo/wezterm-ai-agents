@@ -79,8 +79,20 @@ ai.apply(config, { plugin_dir = plugin_dir })
 
 ## Hooks Setup
 
-Agent state detection requires configuring the bundled `hooks/agent_status.sh` in each agent's hooks.
+Agent state detection works by registering the bundled `hooks/agent_status.sh` in each agent's config file. **By default (`install_hooks = true`), this is merged into each agent's config file automatically on WezTerm startup** (requires `jq`). Normally you don't need to do anything.
+
+How the automatic setup behaves:
+
+- It never breaks existing settings. Only its own entries are added/updated idempotently; other hooks and config keys are preserved. A `.bak` is left for any file that changes.
+- If the config file is a **symlink** (e.g. managed by dotfiles), it is skipped. Use the manual setup below in that case.
+- If `jq` is missing, or an existing file is invalid JSON, it is skipped. A notification is shown on startup when `jq` is missing.
+- Set `install_hooks = false` to disable the automatic setup.
+
 The script writes state as JSON to `$XDG_STATE_HOME/wezterm-ai-agents/<gui_pid>/wezterm-agent-<pane_id>` (falls back to `~/.local/state/wezterm-ai-agents` if `$XDG_STATE_HOME` is unset), which the plugin reads periodically. `<gui_pid>` is a per-GUI-process namespace so that running multiple WezTerm instances does not mix up state.
+
+## Manual Hooks Setup
+
+If you don't use the automatic setup (symlinked config, no `jq`, or `install_hooks = false`), configure it manually as follows.
 
 ### Finding the hooks path
 

@@ -133,6 +133,7 @@ local default_opts = {
   install_ui_tab_title = true,
   install_ui_status = true,
   install_keybinds = true,
+  install_hooks = true,
   disabled_keybinds = {},
   keybinds = {},
   modifier_prefix = wezterm.target_triple:find("darwin") and "CMD" or "CTRL",
@@ -227,6 +228,18 @@ function M.apply(config, user_opts)
     -- 死んだ GUI プロセスの状態ファイル名前空間と、旧バージョンのフラット残置を回収する。
     local ok, err = pcall(agent.cleanup_dead_namespaces, opts)
     if not ok then wezterm.log_warn("[ai-agents] cleanup_dead_namespaces failed: " .. tostring(err)) end
+    -- 各エージェントの設定ファイルに状態追跡フックを冪等マージする (既定 ON)。複数回発火しても冪等。
+    -- jq 未導入など「知らせるべき失敗」は diagnostics 経由でユーザーに通知する (symlink/不正JSON のスキップは正常)。
+    if opts.install_hooks then
+      local cmd = { "bash", M.hooks_dir .. "/install_hooks.sh", M.hooks_dir }
+      for _, impl in ipairs(agent.all()) do
+        cmd[#cmd + 1] = impl.id
+      end
+      local ran, stdout = wezterm.run_child_process(cmd)
+      if (not ran) or (stdout and stdout:find("jq-missing", 1, true)) then
+        diagnostics.report("install_hooks", "状態追跡フックの自動設定に失敗 (jq 未導入?)")
+      end
+    end
     wezterm.plugin.update_all()
   end)
 
