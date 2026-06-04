@@ -76,6 +76,10 @@ function M.truncate_left(s, n)
 end
 
 function M.log_info(...) print("[wezterm.log_info]", ...) end
+function M.log_warn(...)
+  local args = { ... }
+  io.stderr:write("[wezterm.log_warn] " .. table.concat(args, " ") .. "\n")
+end
 function M.log_error(...)
   local args = { ... }
   io.stderr:write("[wezterm.log_error] " .. table.concat(args, " ") .. "\n")
