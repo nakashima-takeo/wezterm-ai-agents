@@ -1,0 +1,127 @@
+package.path = package.path .. ";test/?.lua"
+local H = require("helper")
+local test = H.test
+
+local script = H.plugin_dir .. "/hooks/install_hooks.sh"
+local hooks_dir = H.plugin_dir .. "/hooks"
+
+local function sh(s) return "'" .. tostring(s):gsub("'", "'\\''") .. "'" end
+
+-- install_hooks.sh を HOME 差し替えで実行し、stdout を返す。
+local function run(home, dir, ids)
+  local args = {}
+  for _, id in ipairs(ids) do
+    args[#args + 1] = sh(id)
+  end
+  local cmd = string.format("HOME=%s bash %s %s %s 2>&1", sh(home), sh(script), sh(dir), table.concat(args, " "))
+  local p = io.popen(cmd)
+  local out = p:read("*a")
+  p:close()
+  return out
+end
+
+local function cleanup(home) os.execute("rm -rf " .. sh(home)) end
+
+H.section("hooks 自動インストール (install_hooks.sh)")
+
+test("新規生成：claude の settings.json が正規 hooks を持つ", function()
+  local home = H.tmp_dir()
+  local out = run(home, hooks_dir, { "claude" })
+  H.assert_match(out, "applied claude")
+  local content = H.read_file(home .. "/.claude/settings.json")
+  H.assert_not_nil(content, "ファイルが生成される")
+  local data = wezterm.json_parse(content)
+  H.assert_not_nil(data.hooks.SessionStart)
+  H.assert_match(content, "agent_status.sh claude idle")
+  H.assert_match(content, "agent_status.sh claude waiting") -- matcher 付き PreToolUse
+  cleanup(home)
+end)
+
+test("冪等：2回実行で2回目は unchanged、.bak は作られない", function()
+  local home = H.tmp_dir()
+  run(home, hooks_dir, { "claude" })
+  local first = H.read_file(home .. "/.claude/settings.json")
+  local out2 = run(home, hooks_dir, { "claude" })
+  H.assert_match(out2, "unchanged claude")
+  H.assert_eq(H.read_file(home .. "/.claude/settings.json"), first, "内容が変わらない")
+  H.assert_nil(H.read_file(home .. "/.claude/settings.json.bak"), "新規→無変更なので .bak なし")
+  cleanup(home)
+end)
+
+test("既存保持：無関係キー・他フックを残し、変更時 .bak を作る", function()
+  local home = H.tmp_dir()
+  os.execute("mkdir -p " .. sh(home .. "/.claude"))
+  H.write_file(
+    home .. "/.claude/settings.json",
+    '{"model":"opus","hooks":{"Stop":[{"hooks":[{"type":"command","command":"echo other"}]}]}}'
+  )
+  local out = run(home, hooks_dir, { "claude" })
+  H.assert_match(out, "applied claude")
+  local content = H.read_file(home .. "/.claude/settings.json")
+  local data = wezterm.json_parse(content)
+  H.assert_eq(data.model, "opus", "無関係キーを保持")
+  H.assert_match(content, "echo other", "既存の他フックを保持")
+  H.assert_match(content, "agent_status.sh claude done", "自分のフックを追加")
+  H.assert_not_nil(H.read_file(home .. "/.claude/settings.json.bak"), "変更時は .bak を作る")
+  cleanup(home)
+end)
+
+test("symlink はスキップし、リンク先を変更しない", function()
+  local home = H.tmp_dir()
+  os.execute("mkdir -p " .. sh(home .. "/.claude"))
+  local real = home .. "/real.json"
+  H.write_file(real, '{"keep":1}')
+  os.execute(string.format("ln -s %s %s", sh(real), sh(home .. "/.claude/settings.json")))
+  local out = run(home, hooks_dir, { "claude" })
+  H.assert_match(out, "skip%-symlink claude")
+  H.assert_true(not H.read_file(real):find("agent_status", 1, true), "リンク先は触らない")
+  cleanup(home)
+end)
+
+test("不正 JSON はスキップし、内容を変更しない", function()
+  local home = H.tmp_dir()
+  os.execute("mkdir -p " .. sh(home .. "/.claude"))
+  H.write_file(home .. "/.claude/settings.json", "{ this is : not json, }")
+  local out = run(home, hooks_dir, { "claude" })
+  H.assert_match(out, "skip%-invalid%-json claude")
+  H.assert_true(not H.read_file(home .. "/.claude/settings.json"):find("agent_status", 1, true), "不正JSONは触らない")
+  cleanup(home)
+end)
+
+test("スペースを含む hooks_dir でも冪等 (.bak が増えない)", function()
+  local home = H.tmp_dir()
+  local dir = home .. "/h o o k s"
+  os.execute("mkdir -p " .. sh(dir))
+  run(home, dir, { "claude" })
+  local out2 = run(home, dir, { "claude" })
+  H.assert_match(out2, "unchanged claude")
+  H.assert_nil(H.read_file(home .. "/.claude/settings.json.bak"), "2回目で .bak が増えない")
+  H.assert_match(H.read_file(home .. "/.claude/settings.json"), "h o o k s/agent_status.sh", "スペース込みパスが入る")
+  cleanup(home)
+end)
+
+test("jq 無しでは何も書かず jq-missing を exit 3 で返す", function()
+  local home = H.tmp_dir()
+  local cmd = string.format('PATH=/var/empty HOME=%s /bin/bash %s %s claude 2>&1; echo "__EXIT:$?"', sh(home), sh(script), sh(hooks_dir))
+  local p = io.popen(cmd)
+  local out = p:read("*a")
+  p:close()
+  H.assert_match(out, "jq%-missing")
+  H.assert_match(out, "__EXIT:3")
+  H.assert_nil(H.read_file(home .. "/.claude/settings.json"), "何も書かれない")
+  cleanup(home)
+end)
+
+test("cursor は version:1 と camelCase イベントで生成される", function()
+  local home = H.tmp_dir()
+  local out = run(home, hooks_dir, { "cursor" })
+  H.assert_match(out, "applied cursor")
+  local content = H.read_file(home .. "/.cursor/hooks.json")
+  local data = wezterm.json_parse(content)
+  H.assert_eq(data.version, 1)
+  H.assert_not_nil(data.hooks.sessionStart)
+  H.assert_match(content, "agent_status.sh cursor unknown")
+  cleanup(home)
+end)
+
+H.finish()
