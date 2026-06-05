@@ -173,4 +173,51 @@ test("gemini は Notification→waiting を含む", function()
   cleanup(home)
 end)
 
+-- install_hooks.sh の結果 (ran, stdout) を原因別に解釈する判定ロジック。
+-- 推測 ("jq 未導入?") をやめ、sh が返した結果コードだけに基づいて文言を決める。
+H.section("install_hooks 失敗判定 (init._install_hooks_diagnostic)")
+
+local diag = H.load_mod("init")._install_hooks_diagnostic
+
+test("成功 (applied/unchanged) は通知しない", function() H.assert_nil(diag(true, "applied codex\nunchanged gemini\n")) end)
+
+test(
+  "symlink/unknown のスキップは正常で通知しない",
+  function() H.assert_nil(diag(true, "skip-symlink claude\nskip-unknown foo\n")) end
+)
+
+test("どのケースもユーザーが体感する機能名で言う (内部用語を出さない)", function()
+  H.assert_match(diag(false, "jq-missing\n"), "状態表示")
+  H.assert_true(not diag(false, "jq-missing\n"):find("フック", 1, true), "内部用語『フック』を出さない")
+end)
+
+test("jq-missing は jq 欠如だけを言う (推測しない)", function()
+  local msg = diag(false, "jq-missing\n")
+  H.assert_match(msg, "jq")
+  H.assert_true(not msg:find("未導入?", 1, true), "煽る推測文言を含まない")
+end)
+
+test("skip-invalid-json は壊れた設定ファイルとして id 付きで知らせる", function()
+  local msg = diag(true, "applied claude\nskip-invalid-json codex\n")
+  H.assert_match(msg, "壊れて")
+  H.assert_match(msg, "codex")
+end)
+
+test("複数の skip-invalid-json は全 id を列挙する", function()
+  local msg = diag(true, "skip-invalid-json codex\nskip-invalid-json gemini\n")
+  H.assert_match(msg, "codex")
+  H.assert_match(msg, "gemini")
+end)
+
+test(
+  "jq-missing は他の失敗より優先される",
+  function() H.assert_match(diag(false, "skip-invalid-json codex\njq-missing\n"), "jq") end
+)
+
+test("結果無し (実行エラー) は原因を断定せず次の一手 (手動設定) を示す", function()
+  local msg = diag(false, "")
+  H.assert_match(msg, "README")
+  H.assert_true(not msg:find("jq", 1, true), "jq のせいにしない")
+end)
+
 H.finish()

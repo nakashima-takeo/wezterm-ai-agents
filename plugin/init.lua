@@ -83,6 +83,25 @@ local M = {
   ui = nil,
 }
 
+-- install_hooks.sh の実行結果 (ran=終了コード0か, stdout=結果行) から、
+-- ユーザーに知らせるべき失敗文言を返す (知らせる必要が無ければ nil)。原因を推測せず、
+-- sh が返した結果コードを原因別に解釈する。symlink/unknown スキップや成功は通知しない。
+local function install_hooks_diagnostic(ran, stdout)
+  stdout = stdout or ""
+  -- ユーザーが体感する機能名 (タブ等の状態表示) で、原因と次の一手を示す。内部用語と推測は使わない。
+  local headline = "エージェントの状態表示を有効化できませんでした。"
+  if stdout:find("jq-missing", 1, true) then return headline .. "jq を入れて WezTerm を再起動してください" end
+  -- 既存設定が不正な JSON で触れなかったエージェントを集める (握りつぶさず id 付きで知らせる)。
+  local broken = {}
+  for id in stdout:gmatch("skip%-invalid%-json%s+(%S+)") do
+    broken[#broken + 1] = id
+  end
+  if #broken > 0 then return headline .. "設定ファイルが壊れています: " .. table.concat(broken, ", ") end
+  if not ran then return headline .. "手動設定は README を参照してください" end
+  return nil
+end
+M._install_hooks_diagnostic = install_hooks_diagnostic
+
 -- ============== Defaults ==============
 
 local default_opts = {
@@ -229,16 +248,15 @@ function M.apply(config, user_opts)
     local ok, err = pcall(agent.cleanup_dead_namespaces, opts)
     if not ok then wezterm.log_warn("[ai-agents] cleanup_dead_namespaces failed: " .. tostring(err)) end
     -- 各エージェントの設定ファイルに状態追跡フックを冪等マージする (既定 ON)。複数回発火しても冪等。
-    -- jq 未導入など「知らせるべき失敗」は diagnostics 経由でユーザーに通知する (symlink/不正JSON のスキップは正常)。
+    -- jq 欠如・不正JSON など「知らせるべき失敗」は原因別に diagnostics へ上げる (symlink/unknown スキップは正常)。
     if opts.install_hooks then
       local cmd = { "bash", M.hooks_dir .. "/install_hooks.sh", M.hooks_dir }
       for _, impl in ipairs(agent.all()) do
         cmd[#cmd + 1] = impl.id
       end
       local ran, stdout = wezterm.run_child_process(cmd)
-      if (not ran) or (stdout and stdout:find("jq-missing", 1, true)) then
-        diagnostics.report("install_hooks", "状態追跡フックの自動設定に失敗 (jq 未導入?)")
-      end
+      local msg = install_hooks_diagnostic(ran, stdout)
+      if msg then diagnostics.report("install_hooks", msg) end
     end
     wezterm.plugin.update_all()
   end)
