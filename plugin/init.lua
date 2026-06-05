@@ -268,7 +268,6 @@ function M.apply(config, user_opts)
     agent = agent,
     ui = ui,
     editor = editor,
-    diagnostics = diagnostics,
     opts = opts,
   }
   M.deps = deps
@@ -358,9 +357,11 @@ function M.apply(config, user_opts)
       prev_pane_id[win_id] = pane_id
       if focus_changed or (now - last_status_tick) >= opts.status_update_interval then
         last_status_tick = now
-        -- 知らせるべき失敗 (window 不在の経路で溜まった分) を、window がある今 toast で一度だけ出す。
-        local pendings = diagnostics.take_pending()
-        if #pendings > 0 then window:toast_notification("wezterm-ai-agents", table.concat(pendings, "\n"), nil, 8000) end
+        -- 知らせるべき失敗 (window 不在の経路で溜まった分) を、アクティブペインへ端末出力する。
+        -- 通常の出力としてスクロールバックに残り、ユーザーは Ctrl+L 等で消せる。
+        for _, msg in ipairs(diagnostics.take_pending()) do
+          pcall(function() pane:inject_output("\r\n\27[33m[wezterm-ai-agents] " .. msg .. "\27[0m\r\n") end)
+        end
         local impl, agent_opts = agent.detect(pane, opts)
         if impl and impl.consume_done then pcall(impl.consume_done, pane, agent_opts) end
         local segs = ui.right_status_segments(window, pane, deps)
