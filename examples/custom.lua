@@ -64,6 +64,11 @@ ai.apply(config, {
   status_update_interval = 2,
   -- How often (seconds) workspace state (tabs, agents, layouts) is synced to JSON.
   session_sync_interval = 10,
+
+  -- Auto-install agent state-tracking hooks into each agent's config on startup
+  -- (default: true; requires `jq`). Symlinked configs (e.g. dotfiles) are skipped.
+  -- Set false to manage hooks yourself (see README "手動でのHooks設定").
+  install_hooks = false,
 })
 
 return config
