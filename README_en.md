@@ -146,8 +146,9 @@ Cursor lacks fine-grained lifecycle hooks, so the state always shows as `unknown
 {
   "hooks": {
     "SessionStart":     [{ "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh codex idle" }] }],
-    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh codex working" }] }],
-    "Stop":             [{ "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh codex done" }] }]
+    "UserPromptSubmit":  [{ "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh codex working" }] }],
+    "PermissionRequest": [{ "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh codex waiting" }] }],
+    "Stop":              [{ "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh codex done" }] }]
   }
 }
 ```
@@ -162,6 +163,7 @@ Cursor lacks fine-grained lifecycle hooks, so the state always shows as `unknown
     "SessionStart": [{ "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh gemini idle" }] }],
     "SessionEnd":   [{ "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh gemini clear" }] }],
     "BeforeAgent":  [{ "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh gemini working" }] }],
+    "Notification": [{ "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh gemini waiting" }] }],
     "AfterAgent":   [{ "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh gemini done" }] }]
   }
 }

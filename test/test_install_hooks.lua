@@ -124,4 +124,53 @@ test("cursor は version:1 と camelCase イベントで生成される", functi
   cleanup(home)
 end)
 
+test("spec 外イベントに残った自分の古いエントリも除去される", function()
+  local home = H.tmp_dir()
+  os.execute("mkdir -p " .. sh(home .. "/.codex"))
+  -- codex spec に無い SubagentStop に古い agent_status エントリが残っている状態
+  H.write_file(
+    home .. "/.codex/hooks.json",
+    '{"hooks":{"SubagentStop":[{"hooks":[{"type":"command","command":"/old/hooks/agent_status.sh codex done"}]}]}}'
+  )
+  run(home, hooks_dir, { "codex" })
+  local data = wezterm.json_parse(H.read_file(home .. "/.codex/hooks.json"))
+  H.assert_nil(data.hooks.SubagentStop, "spec 外イベントの自分の残骸は除去され、空イベントは掃除される")
+  H.assert_not_nil(data.hooks.SessionStart, "spec のイベントは追加される")
+  cleanup(home)
+end)
+
+test("command 単位で除去し、同一グループに同居する他フックは残す", function()
+  local home = H.tmp_dir()
+  os.execute("mkdir -p " .. sh(home .. "/.codex"))
+  -- 同一 matcher グループ内に他フックと古い自分のフックが同居
+  H.write_file(
+    home .. "/.codex/hooks.json",
+    '{"hooks":{"Stop":[{"hooks":[{"command":"echo keep"},{"command":"/old/agent_status.sh codex done"}]}]}}'
+  )
+  run(home, hooks_dir, { "codex" })
+  local content = H.read_file(home .. "/.codex/hooks.json")
+  H.assert_match(content, "echo keep", "同居する他フックは残る")
+  H.assert_true(not content:find("/old/agent_status", 1, true), "古い自分のフックだけ消える")
+  H.assert_match(content, "agent_status.sh codex done", "正規版が追加される")
+  cleanup(home)
+end)
+
+test("codex は PermissionRequest→waiting を含む", function()
+  local home = H.tmp_dir()
+  run(home, hooks_dir, { "codex" })
+  local data = wezterm.json_parse(H.read_file(home .. "/.codex/hooks.json"))
+  H.assert_not_nil(data.hooks.PermissionRequest)
+  H.assert_match(H.read_file(home .. "/.codex/hooks.json"), "agent_status.sh codex waiting")
+  cleanup(home)
+end)
+
+test("gemini は Notification→waiting を含む", function()
+  local home = H.tmp_dir()
+  run(home, hooks_dir, { "gemini" })
+  local data = wezterm.json_parse(H.read_file(home .. "/.gemini/settings.json"))
+  H.assert_not_nil(data.hooks.Notification)
+  H.assert_match(H.read_file(home .. "/.gemini/settings.json"), "agent_status.sh gemini waiting")
+  cleanup(home)
+end)
+
 H.finish()

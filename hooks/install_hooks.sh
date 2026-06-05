@@ -32,12 +32,12 @@ for id in "$@"; do
     codex)
       file="$HOME/.codex/hooks.json"
       style=nested
-      spec='[{"event":"SessionStart","state":"idle"},{"event":"UserPromptSubmit","state":"working"},{"event":"Stop","state":"done"}]'
+      spec='[{"event":"SessionStart","state":"idle"},{"event":"UserPromptSubmit","state":"working"},{"event":"PermissionRequest","state":"waiting"},{"event":"Stop","state":"done"}]'
       ;;
     gemini)
       file="$HOME/.gemini/settings.json"
       style=nested
-      spec='[{"event":"SessionStart","state":"idle"},{"event":"SessionEnd","state":"clear"},{"event":"BeforeAgent","state":"working"},{"event":"AfterAgent","state":"done"}]'
+      spec='[{"event":"SessionStart","state":"idle"},{"event":"SessionEnd","state":"clear"},{"event":"BeforeAgent","state":"working"},{"event":"Notification","state":"waiting"},{"event":"AfterAgent","state":"done"}]'
       ;;
     cursor)
       file="$HOME/.cursor/hooks.json"
@@ -70,12 +70,15 @@ for id in "$@"; do
   if [ "$style" = cursor ]; then
     result=$(printf '%s' "$current" | jq --arg dir "$DIR" --argjson spec "$spec" '
       .version = 1
+      # 全イベントから自分の command を除去 (command 単位。同居する他フックは残す。空になったイベントは掃除)
+      | .hooks = (
+          (.hooks // {})
+          | map_values(map(select((.command // "") | contains("agent_status.sh cursor") | not)))
+          | with_entries(select(.value | length > 0))
+        )
+      # spec の正規エントリを追加
       | reduce $spec[] as $s (.;
-          .hooks[$s.event] = (
-            ((.hooks[$s.event]) // [])
-            | map(select((.command // "") | contains("agent_status.sh cursor") | not))
-            + [ {command: ($dir + "/agent_status.sh cursor " + $s.state)} ]
-          )
+          .hooks[$s.event] = (((.hooks[$s.event]) // []) + [ {command: ($dir + "/agent_status.sh cursor " + $s.state)} ])
         )
     ') || {
       echo "skip-invalid-json $id"
@@ -83,14 +86,24 @@ for id in "$@"; do
     }
   else
     result=$(printf '%s' "$current" | jq --arg dir "$DIR" --arg id "$id" --argjson spec "$spec" '
-      reduce $spec[] as $s (.;
-        .hooks[$s.event] = (
-          ((.hooks[$s.event]) // [])
-          | map(select(((.hooks) // []) | map((.command // "") | contains("agent_status.sh " + $id)) | any | not))
-          + [ (if $s.matcher then {matcher: $s.matcher} else {} end)
-              + {hooks: [{type: "command", command: ($dir + "/agent_status.sh " + $id + " " + $s.state)}]} ]
-        )
+      # 全イベントから自分の command を除去 (command 単位。matcher グループ内の同居フックは残し、
+      # 自分のエントリだけ消す。空になったグループ/イベントは掃除)。spec 外イベントの古い残骸も消える。
+      .hooks = (
+        (.hooks // {})
+        | map_values(
+            map(.hooks = ((.hooks // []) | map(select((.command // "") | contains("agent_status.sh " + $id) | not))))
+            | map(select(((.hooks) // []) | length > 0))
+          )
+        | with_entries(select(.value | length > 0))
       )
+      # spec の正規エントリを追加
+      | reduce $spec[] as $s (.;
+          .hooks[$s.event] = (
+            ((.hooks[$s.event]) // [])
+            + [ (if $s.matcher then {matcher: $s.matcher} else {} end)
+                + {hooks: [{type: "command", command: ($dir + "/agent_status.sh " + $id + " " + $s.state)}]} ]
+          )
+        )
     ') || {
       echo "skip-invalid-json $id"
       continue
