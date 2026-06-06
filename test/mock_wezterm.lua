@@ -102,6 +102,19 @@ function M.read_dir(dir)
   return entries
 end
 
+-- 実 wezterm.glob に倣い、glob パターンに一致する絶対パスをソート済みで返す。
+function M.glob(pattern)
+  local matches = {}
+  local p = io.popen("ls -1d " .. pattern .. " 2>/dev/null")
+  if not p then return matches end
+  for path in p:lines() do
+    matches[#matches + 1] = path
+  end
+  p:close()
+  table.sort(matches)
+  return matches
+end
+
 -- ===== JSON (cjson if available, else pure-Lua fallback) =====
 local ok_cjson, cjson = pcall(require, "cjson")
 if ok_cjson then

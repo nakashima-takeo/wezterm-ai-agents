@@ -31,12 +31,23 @@ end
 
 local workspace, worktree, layout, selector, agent, ui, builtin_labels, builtin_icons, editor, links, diagnostics
 
-local all_agent_ids = { "claude", "cursor", "codex", "gemini" }
+-- 既知エージェント id を service/agents/*.lua のファイル名から導出する (手動リストを持たない)。
+-- ファイルを 1 枚足せば候補・検証・登録すべてに自動で乗る。glob はソート済みを返す (= 表示順は id 昇順)。
+local function discover_agent_ids(plugin_dir)
+  local ids = {}
+  for _, path in ipairs(wezterm.glob(plugin_dir .. "/plugin/service/agents/*.lua")) do
+    local id = path:match("([^/]+)%.lua$")
+    if id then ids[#ids + 1] = id end
+  end
+  return ids
+end
 
 -- モジュールを層順 (下位→上位) にロードする。配置と並びがそのまま依存階層を表す。
 -- 下位は UI を知らず、上位 (selector/ui) が deps 経由で下位を呼ぶ。循環は引数注入で回避済み。
 local function load_modules(plugin_dir, opts)
   local function load(rel) return dofile(plugin_dir .. "/plugin/" .. rel .. ".lua") end
+
+  local all_agent_ids = discover_agent_ids(plugin_dir)
 
   -- resource/ 下位層: データ (他に依存しない)
   builtin_labels = load("resource/labels")
