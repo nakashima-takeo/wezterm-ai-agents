@@ -16,6 +16,9 @@ M.colors = {
   error = "#ef4444",
 }
 
+-- Gemini CLI は `gemini --resume <UUID>` で特定セッションを再開する (v0.20.0 以降)。
+M.resume_flag = "--resume %s"
+
 M.default_opts = {
   command = "gemini",
   shell = os.getenv("SHELL") or "/bin/sh",

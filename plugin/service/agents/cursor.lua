@@ -17,6 +17,9 @@ M.colors = {
   error = "#ef4444",
 }
 
+-- cursor-agent の再開は `--resume=<chatId>` (= 区切り。公式が --resume=-1 を正規表記とする)。
+M.resume_flag = "--resume=%s"
+
 M.default_opts = {
   command = "cursor-agent",
   shell = os.getenv("SHELL") or "/bin/sh",

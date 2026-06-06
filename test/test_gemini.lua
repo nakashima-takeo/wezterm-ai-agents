@@ -130,13 +130,14 @@ test("正常系：session_id指定時は--resumeフラグ付きで起動する",
   H.assert_match(args[3], "%-%-resume 'a1b2c3d4'")
 end)
 
-test("正常系：cwd指定時はcdプレフィックス付きで起動する", function()
+test("正常系：cwdはコマンドに含めない（作業ディレクトリは spawn 側 cwd が設定する）", function()
   local gemini = load_agent("service/agents/gemini")
   local opts = { command = "gemini", shell = "/bin/zsh", status_dir = "/tmp" }
 
   local args = gemini.spawn_args(opts, nil, "/home/user/project")
 
-  H.assert_match(args[3], "cd '/home/user/project'")
+  H.assert_true(args[3]:find("cd ", 1, true) == nil)
+  H.assert_true(args[3]:find("/home/user/project", 1, true) == nil)
 end)
 
 H.finish()

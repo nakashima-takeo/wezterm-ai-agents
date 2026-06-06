@@ -149,20 +149,21 @@ test("正常系：session_id指定時は--resumeフラグ付きで起動する",
   H.assert_match(args[3], "%-%-resume 'session%-abc'")
 end)
 
-test("正常系：cwd指定時はcdプレフィックス付きで起動する", function()
+test("正常系：cwdはコマンドに含めない（作業ディレクトリは spawn 側 cwd が設定する）", function()
   local claude = load_agent("service/agents/claude")
   local opts = { command = "claude", shell = "/bin/zsh", status_dir = "/tmp" }
 
   local args = claude.spawn_args(opts, nil, "/home/user/project")
 
-  H.assert_match(args[3], "cd '/home/user/project'")
+  H.assert_true(args[3]:find("cd ", 1, true) == nil)
+  H.assert_true(args[3]:find("/home/user/project", 1, true) == nil)
 end)
 
-test("正常系：cwdにシングルクォートを含む場合はシェルエスケープされる", function()
+test("正常系：session_idにシングルクォートを含む場合はシェルエスケープされる", function()
   local claude = load_agent("service/agents/claude")
   local opts = { command = "claude", shell = "/bin/zsh", status_dir = "/tmp" }
 
-  local args = claude.spawn_args(opts, nil, "/path/it's here")
+  local args = claude.spawn_args(opts, "ses'sion")
 
   H.assert_true(args[3]:find("'\\''", 1, true) ~= nil)
 end)

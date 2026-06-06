@@ -11,8 +11,12 @@
 -- Optional (injected by register() if not provided):
 --   default_state : fallback state when file is absent (default "idle")
 --   detect, state, session_id, consume_done, spawn_args
--- spawn_args receives agent_opts (from opts_for), which carries:
---   shell_quote(s) — POSIX single-quote escaping utility
+--   resume_flag   : 既定 spawn_args が session_id を渡す再開フラグ書式 (例 "--resume %s")。
+--                   未定義なら再開せず新規起動。独自構文のエージェント (codex) は spawn_args を直接実装。
+-- 既定 spawn_args は cwd を使わない (作業ディレクトリは spawn 側の cwd 引数が設定するため二重 cd しない)。
+-- agent_opts (from opts_for) が運ぶユーティリティ:
+--   shell_quote(s)         — POSIX single-quote escaping utility
+--   wrap_shell(shell, cmd) — "<cmd>; exec <shell> -l" をログインシェル起動 args に包む共通ラッパ
 
 local wezterm = require("wezterm")
 local mux = wezterm.mux
@@ -20,6 +24,10 @@ local mux = wezterm.mux
 local M = {}
 
 function M.shell_quote(s) return "'" .. s:gsub("'", "'\\''") .. "'" end
+
+-- エージェント終了後はログインシェルに落とす共通ラッパ。作業ディレクトリは spawn 側の cwd 引数が
+-- 設定するため、ここでは cd しない (全 spawn 経路が spawn に cwd を渡しており二重指定になるため)。
+function M.wrap_shell(shell, cmd) return { shell, "-lc", string.format("%s; exec %s -l", cmd, shell) } end
 
 -- 状態ファイルは自 GUI プロセス PID のサブディレクトリに名前空間化される (複数プロセス間の誤削除・pane_id 衝突を防ぐ)。
 -- 書き込み側 (hooks) は WEZTERM_UNIX_SOCKET 由来、読み取り側 (ここ) は procinfo.pid() 由来で同一 PID に合意する。
@@ -96,13 +104,11 @@ function M.register(impl)
   end
 
   if not impl.spawn_args then
-    impl.spawn_args = function(opts, session_id, cwd)
+    impl.spawn_args = function(opts, session_id)
       local cmd = opts.command
-      if session_id then cmd = cmd .. " --resume " .. M.shell_quote(session_id) end
-      local cd_prefix = ""
-      if cwd then cd_prefix = "cd " .. M.shell_quote(cwd) .. " && " end
-      local shell = opts.shell
-      return { shell, "-lc", string.format("%s%s; exec %s -l", cd_prefix, cmd, shell) }
+      -- resume_flag を持つエージェントのみ session_id を再開フラグで渡す (書式は impl ごと: 例 "--resume %s")。
+      if session_id and impl.resume_flag then cmd = cmd .. " " .. string.format(impl.resume_flag, M.shell_quote(session_id)) end
+      return M.wrap_shell(opts.shell, cmd)
     end
   end
 
@@ -188,6 +194,7 @@ function M.opts_for(agent_impl, plugin_opts)
   out.status_base = out.status_dir
   if out.status_dir then out.status_dir = ns_dir(out.status_dir) end
   out.shell_quote = M.shell_quote
+  out.wrap_shell = M.wrap_shell
   return out
 end
 

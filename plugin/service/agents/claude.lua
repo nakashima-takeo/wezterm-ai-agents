@@ -16,6 +16,9 @@ M.colors = {
   error = "#ef4444",
 }
 
+-- Claude Code は `claude --resume <id>` で特定セッションを再開する。
+M.resume_flag = "--resume %s"
+
 M.default_opts = {
   command = "claude",
   shell = os.getenv("SHELL") or "/bin/sh",
