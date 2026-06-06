@@ -82,9 +82,13 @@ local function load_modules(plugin_dir, opts)
         if installed[c.id] then register_ids[#register_ids + 1] = c.id end
       end
       if #register_ids == 0 then
+        -- 検出 0 件は PATH 欠落 (GUI 起動で環境が継承されない等) の可能性が高い。
+        -- 静かに全滅 (agent タブが素のシェルに化ける) させず、従来どおり全登録へフォールバックしつつ原因を通知する。
+        register_ids = all_agent_ids
         diagnostics.report(
           "agents_missing",
-          "エージェントの CLI が見つかりませんでした。claude / codex / gemini / cursor-agent のいずれかを PATH に入れて WezTerm を再起動するか、enabled_agents で明示してください"
+          "エージェントの CLI が PATH 上に見つかりませんでした (暫定で全エージェントを登録します)。"
+            .. "claude / codex / gemini / cursor-agent を PATH に入れて WezTerm を再起動するか、enabled_agents で明示してください"
         )
       end
     end
