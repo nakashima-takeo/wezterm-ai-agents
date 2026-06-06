@@ -110,6 +110,24 @@ test("スペースを含む hooks_dir でも冪等 (.bak が増えない)", func
   cleanup(home)
 end)
 
+test("hooks_dir 変更追従：別 dir で再実行すると出現回数1・旧 dir が残らない (round-trip)", function()
+  local home = H.tmp_dir()
+  local dir_b = home .. "/hooks-b"
+  os.execute("mkdir -p " .. sh(dir_b))
+  -- 「除去→再追加」ロジックの唯一の存在理由 (hooks_dir 変更追従) を直接検証する。
+  run(home, hooks_dir, { "claude" }) -- dir A で初回
+  local out2 = run(home, dir_b, { "claude" }) -- dir B で再実行 (dir が変わるので applied)
+  H.assert_match(out2, "applied claude")
+  local content = H.read_file(home .. "/.claude/settings.json")
+  -- (1) 自分の command が重複せず1回だけ (claude の idle は SessionStart のみ)
+  local _, count = content:gsub("agent_status%.sh claude idle", "")
+  H.assert_eq(count, 1, "agent_status.sh claude idle が1回だけ: " .. content)
+  -- (2) 旧 dir のエントリが残らず、新 dir に差し替わっている
+  H.assert_true(not content:find(hooks_dir .. "/agent_status.sh", 1, true), "旧 dir のエントリが残らない: " .. content)
+  H.assert_true(content:find(dir_b .. "/agent_status.sh", 1, true) ~= nil, "新 dir のエントリに差し替わる: " .. content)
+  cleanup(home)
+end)
+
 test("jq 無しでは何も書かず jq-missing を exit 3 で返す", function()
   local home = H.tmp_dir()
   local cmd = string.format('PATH=/var/empty HOME=%s /bin/bash %s %s claude 2>&1; echo "__EXIT:$?"', sh(home), sh(script), sh(hooks_dir))
