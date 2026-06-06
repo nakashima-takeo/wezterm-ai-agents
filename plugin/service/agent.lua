@@ -149,6 +149,29 @@ function M.detect_installed(candidates, shell, run)
   return installed
 end
 
+-- command 文字列から先頭バイナリ名を取り出す (例 "claude --foo" → "claude")。
+-- 検出はこのバイナリが PATH 上に在るかで判定する。先頭が取れなければ nil。
+function M.command_bin(command) return command and command:match("^%s*(%S+)") or nil end
+
+-- candidates ({id, bin, ...} の配列) から登録すべき id 配列を決める純粋関数。
+-- 戻り値: ids(登録対象配列), missing(bool)。
+--   missing=true は「検出は動いたが 1 件も見つからず全登録へフォールバックした」場合のみ
+--   (呼び出し側が agents_missing 通知を出す合図)。検出不能 (シェル失敗) は全登録だが missing=false。
+function M.resolve_register_ids(candidates, shell, run)
+  local all_ids = {}
+  for _, c in ipairs(candidates) do
+    all_ids[#all_ids + 1] = c.id
+  end
+  local installed = M.detect_installed(candidates, shell, run)
+  if installed == nil then return all_ids, false end -- 検出不能: 安全側に全登録
+  local ids = {}
+  for _, c in ipairs(candidates) do
+    if installed[c.id] then ids[#ids + 1] = c.id end
+  end
+  if #ids == 0 then return all_ids, true end -- 検出 0 件: 全登録フォールバック + 通知合図
+  return ids, false
+end
+
 -- Build per-agent opts by merging defaults + user overrides.
 -- Plugin-level status_dir is injected unless agent-specific override exists.
 function M.opts_for(agent_impl, plugin_opts)

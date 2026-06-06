@@ -63,34 +63,34 @@ local function load_modules(plugin_dir, opts)
   -- 登録対象 id を決める。enabled_agents を明示した場合はそれを尊重する (自動検出のエスケープハッチ)。
   -- 未指定 (既定) は各エージェントの command 先頭バイナリが PATH 上に在るものだけを検出して登録し、
   -- 未インストールのツールに設定を書いたり選択 UI に並べたりしない。
+  -- impl を一度だけ load して再利用する (検出と登録で二重 dofile しない)。
+  local impl_by_id = {}
   local register_ids = opts.enabled_agents
   if not register_ids then
     local shell = os.getenv("SHELL") or "/bin/sh"
     local candidates = {}
     for _, id in ipairs(all_agent_ids) do
       local impl = load("service/agents/" .. id)
+      impl_by_id[id] = impl
       local ov = opts.agents and opts.agents[id]
       local command = (ov and ov.command) or (impl.default_opts and impl.default_opts.command) or id
-      candidates[#candidates + 1] = { id = id, bin = command:match("^%s*(%S+)") or id }
+      candidates[#candidates + 1] = { id = id, bin = agent.command_bin(command) or id }
     end
-    local installed = agent.detect_installed(candidates, shell)
-    if installed == nil then
-      register_ids = all_agent_ids -- 検出不能 (シェル実行失敗): 安全側に全登録 (現行動作にフォールバック)
-    else
-      register_ids = {}
+    local missing
+    register_ids, missing = agent.resolve_register_ids(candidates, shell)
+    if missing then
+      -- 検出 0 件は PATH 欠落 (GUI 起動で環境が継承されない等) の可能性が高い。原因を通知する。
+      -- 案内する CLI 名は candidates の bin から動的生成し、エージェント追加時の文言更新漏れを防ぐ。
+      local bins = {}
       for _, c in ipairs(candidates) do
-        if installed[c.id] then register_ids[#register_ids + 1] = c.id end
+        bins[#bins + 1] = c.bin
       end
-      if #register_ids == 0 then
-        -- 検出 0 件は PATH 欠落 (GUI 起動で環境が継承されない等) の可能性が高い。
-        -- 静かに全滅 (agent タブが素のシェルに化ける) させず、従来どおり全登録へフォールバックしつつ原因を通知する。
-        register_ids = all_agent_ids
-        diagnostics.report(
-          "agents_missing",
-          "エージェントの CLI が PATH 上に見つかりませんでした (暫定で全エージェントを登録します)。"
-            .. "claude / codex / gemini / cursor-agent を PATH に入れて WezTerm を再起動するか、enabled_agents で明示してください"
-        )
-      end
+      diagnostics.report(
+        "agents_missing",
+        "エージェントの CLI が PATH 上に見つかりませんでした (暫定で全エージェントを登録します)。"
+          .. table.concat(bins, " / ")
+          .. " のいずれかを PATH に入れて WezTerm を再起動するか、enabled_agents で明示してください"
+      )
     end
   end
 
@@ -103,7 +103,7 @@ local function load_modules(plugin_dir, opts)
       end
     end
     if not found then error("wezterm-ai-agents: unknown agent '" .. id .. "'. Available: " .. table.concat(all_agent_ids, ", ")) end
-    agent.register(load("service/agents/" .. id))
+    agent.register(impl_by_id[id] or load("service/agents/" .. id))
   end
 end
 
