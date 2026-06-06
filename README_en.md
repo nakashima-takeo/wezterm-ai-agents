@@ -79,8 +79,22 @@ ai.apply(config, { plugin_dir = plugin_dir })
 
 ## Hooks Setup
 
-Agent state detection requires configuring the bundled `hooks/agent_status.sh` in each agent's hooks.
+Agent state detection works by registering the bundled `hooks/agent_status.sh` in each agent's config file. **By default (`install_hooks = true`), this is merged into each agent's config file automatically on WezTerm startup** (requires `jq`). Normally you don't need to do anything.
+
+How the automatic setup behaves:
+
+- It never breaks existing settings. Only its own entries are added/updated idempotently; other hooks and config keys are preserved. Writes are atomic via a temp file.
+- If the config file is a **symlink** (e.g. managed by dotfiles), it is skipped. Use the manual setup below in that case.
+- If `jq` is missing, or an existing file is invalid JSON, it is skipped. A notification is shown on startup when `jq` is missing.
+- Set `install_hooks = false` to disable the automatic setup.
+
 The script writes state as JSON to `$XDG_STATE_HOME/wezterm-ai-agents/<gui_pid>/wezterm-agent-<pane_id>` (falls back to `~/.local/state/wezterm-ai-agents` if `$XDG_STATE_HOME` is unset), which the plugin reads periodically. `<gui_pid>` is a per-GUI-process namespace so that running multiple WezTerm instances does not mix up state.
+
+## Manual Hooks Setup
+
+If you don't use the automatic setup (symlinked config, no `jq`, or `install_hooks = false`), configure it manually as follows.
+
+> **Note**: The source of truth for each agent's event→state mapping is the `spec` in [`hooks/install_hooks.sh`](hooks/install_hooks.sh). The manual examples below are secondary; if they differ, the script wins.
 
 ### Finding the hooks path
 
@@ -134,8 +148,9 @@ Cursor lacks fine-grained lifecycle hooks, so the state always shows as `unknown
 {
   "hooks": {
     "SessionStart":     [{ "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh codex idle" }] }],
-    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh codex working" }] }],
-    "Stop":             [{ "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh codex done" }] }]
+    "UserPromptSubmit":  [{ "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh codex working" }] }],
+    "PermissionRequest": [{ "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh codex waiting" }] }],
+    "Stop":              [{ "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh codex done" }] }]
   }
 }
 ```
@@ -150,6 +165,7 @@ Cursor lacks fine-grained lifecycle hooks, so the state always shows as `unknown
     "SessionStart": [{ "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh gemini idle" }] }],
     "SessionEnd":   [{ "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh gemini clear" }] }],
     "BeforeAgent":  [{ "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh gemini working" }] }],
+    "Notification": [{ "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh gemini waiting" }] }],
     "AfterAgent":   [{ "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh gemini done" }] }]
   }
 }
@@ -200,7 +216,7 @@ ai.apply(config, {
 ```lua
 ai.apply(config, {
   nerd_font = true,                 -- Use Nerd Font icons. Set false for Unicode fallback
-  enabled_agents = nil,             -- nil = all; or { "claude", "codex" }
+  enabled_agents = nil,             -- nil = auto-detect agents whose binary is on PATH; or { "claude", "codex" } to pin
   default_agent = nil,              -- nil = first registered; or "claude"
   default_editor = nil,             -- nil = auto-detect (code/cursor/windsurf/zed/subl); or "/usr/local/bin/cursor" etc.
   editor_links = false,             -- true: click file paths in terminal output to open them at the line in your editor

@@ -51,6 +51,130 @@ test("異常系：idなしやnilの登録はエラーになる", function()
   H.assert_error(function() agent.register(nil) end)
 end)
 
+H.section("インストール検出 (detect_installed)")
+
+test("正常系：command -v で見つかった id だけが集合に入る", function()
+  local agent = load_mod("service/agent")
+  local candidates = { { id = "claude", bin = "claude" }, { id = "cursor", bin = "cursor-agent" } }
+  -- claude は見つかり cursor-agent は見つからない状況を模す。
+  local captured
+  local fake_run = function(args)
+    captured = args
+    return true, "claude\n", ""
+  end
+
+  local installed = agent.detect_installed(candidates, "/bin/sh", fake_run)
+
+  H.assert_eq(installed.claude, true)
+  H.assert_eq(installed.cursor, nil)
+  -- bin/id がシェルに渡るスクリプトへ単一引用符付きで埋まっていること。
+  H.assert_true(captured[3]:find("command %-v 'cursor%-agent'") ~= nil)
+  H.assert_true(captured[3]:find("printf '%%s\\n' 'claude'") ~= nil)
+end)
+
+test("検出不能：シェル実行が失敗したら nil を返す (呼び出し側でフォールバック)", function()
+  local agent = load_mod("service/agent")
+  local candidates = { { id = "claude", bin = "claude" } }
+  local fake_run = function() return false, "", "boom" end
+
+  H.assert_eq(agent.detect_installed(candidates, "/bin/sh", fake_run), nil)
+end)
+
+test("正常系：candidates が空なら実行せず空集合を返す", function()
+  local agent = load_mod("service/agent")
+  local called = false
+  local fake_run = function()
+    called = true
+    return true, "", ""
+  end
+
+  local installed = agent.detect_installed({}, "/bin/sh", fake_run)
+
+  H.assert_eq(next(installed), nil)
+  H.assert_eq(called, false)
+end)
+
+test("組み立て：各文を if/fi で完結させ exit code に検出結果を載せない", function()
+  local agent = load_mod("service/agent")
+  -- 末尾候補が未検出でもスクリプト全体が非ゼロ終了しない (= nil 誤判定を防ぐ) ことを構造で保証する。
+  local candidates = { { id = "claude", bin = "claude" }, { id = "gemini", bin = "gemini" } }
+  local captured
+  local fake_run = function(args)
+    captured = args
+    return true, "claude\n", ""
+  end
+
+  local installed = agent.detect_installed(candidates, "/bin/sh", fake_run)
+
+  H.assert_eq(installed.claude, true)
+  -- 末尾候補を含め各文が if ...; then ...; fi で閉じ、&& 連結 (末尾未ヒットで非ゼロ終了) を使わないこと。
+  H.assert_true(captured[3]:find("if command %-v 'gemini'.-; fi$") ~= nil)
+  H.assert_eq(captured[3]:find("&& printf"), nil)
+end)
+
+test("shell_quote：単一引用符を含む bin を POSIX 流儀でエスケープし注入を防ぐ", function()
+  local agent = load_mod("service/agent")
+  -- bin はユーザーの agents[id].command 由来 (ユーザー制御値)。' を含む値が
+  -- ログインシェルへ安全に埋まる ('x'\''y') ことを検証し、エスケープ核心の退行を検知する。
+  local candidates = { { id = "claude", bin = "x'y" } }
+  local captured
+  local fake_run = function(args)
+    captured = args
+    return true, "", ""
+  end
+
+  agent.detect_installed(candidates, "/bin/sh", fake_run)
+
+  H.assert_true(
+    captured[3]:find("command -v 'x'\\''y'", 1, true) ~= nil,
+    "単一引用符が 'x'\\''y' にエスケープされる: " .. captured[3]
+  )
+end)
+
+H.section("command_bin / 登録 id 決定 (resolve_register_ids)")
+
+test("command_bin：先頭バイナリ名を取り出す (引数・前後空白を無視)", function()
+  local agent = load_mod("service/agent")
+  H.assert_eq(agent.command_bin("claude --dangerously-skip-permissions"), "claude")
+  H.assert_eq(agent.command_bin("  cursor-agent --force "), "cursor-agent")
+  H.assert_eq(agent.command_bin(""), nil)
+  H.assert_eq(agent.command_bin(nil), nil)
+end)
+
+test("resolve_register_ids：検出されたものだけ登録、missing=false", function()
+  local agent = load_mod("service/agent")
+  local candidates = { { id = "claude", bin = "claude" }, { id = "gemini", bin = "gemini" } }
+  local fake_run = function() return true, "claude\n", "" end
+
+  local ids, missing = agent.resolve_register_ids(candidates, "/bin/sh", fake_run)
+
+  H.assert_eq(#ids, 1)
+  H.assert_eq(ids[1], "claude")
+  H.assert_eq(missing, false)
+end)
+
+test("resolve_register_ids：検出不能 (nil) は全登録・missing=false", function()
+  local agent = load_mod("service/agent")
+  local candidates = { { id = "claude", bin = "claude" }, { id = "gemini", bin = "gemini" } }
+  local fake_run = function() return false, "", "boom" end
+
+  local ids, missing = agent.resolve_register_ids(candidates, "/bin/sh", fake_run)
+
+  H.assert_eq(#ids, 2, "検出不能は安全側に全登録")
+  H.assert_eq(missing, false, "シェル失敗は agents_missing 通知しない")
+end)
+
+test("resolve_register_ids：検出 0 件は全登録・missing=true (通知合図)", function()
+  local agent = load_mod("service/agent")
+  local candidates = { { id = "claude", bin = "claude" }, { id = "gemini", bin = "gemini" } }
+  local fake_run = function() return true, "", "" end
+
+  local ids, missing = agent.resolve_register_ids(candidates, "/bin/sh", fake_run)
+
+  H.assert_eq(#ids, 2, "検出 0 件は全登録へフォールバック")
+  H.assert_eq(missing, true, "検出 0 件は agents_missing 通知の合図")
+end)
+
 H.section("設定マージ")
 
 test("正常系：ユーザー設定がデフォルト設定を上書きし、未指定のデフォルトは保持される", function()

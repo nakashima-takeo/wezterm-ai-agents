@@ -29,20 +29,32 @@ local function detect_plugin_dir(user_dir)
   error("wezterm-ai-agents: plugin_dir not detected. Pass opts.plugin_dir or load via wezterm.plugin.require.")
 end
 
-local workspace, worktree, layout, selector, agent, ui, builtin_labels, builtin_icons, editor, links
+local workspace, worktree, layout, selector, agent, ui, builtin_labels, builtin_icons, editor, links, diagnostics
 
-local all_agent_ids = { "claude", "cursor", "codex", "gemini" }
+-- 既知エージェント id を service/agents/*.lua のファイル名から導出する (手動リストを持たない)。
+-- ファイルを 1 枚足せば候補・検証・登録すべてに自動で乗る。glob はソート済みを返す (= 表示順は id 昇順)。
+local function discover_agent_ids(plugin_dir)
+  local ids = {}
+  for _, path in ipairs(wezterm.glob(plugin_dir .. "/plugin/service/agents/*.lua")) do
+    local id = path:match("([^/]+)%.lua$")
+    if id then ids[#ids + 1] = id end
+  end
+  return ids
+end
 
 -- モジュールを層順 (下位→上位) にロードする。配置と並びがそのまま依存階層を表す。
 -- 下位は UI を知らず、上位 (selector/ui) が deps 経由で下位を呼ぶ。循環は引数注入で回避済み。
-local function load_modules(plugin_dir, enabled_agents)
+local function load_modules(plugin_dir, opts)
   local function load(rel) return dofile(plugin_dir .. "/plugin/" .. rel .. ".lua") end
+
+  local all_agent_ids = discover_agent_ids(plugin_dir)
 
   -- resource/ 下位層: データ (他に依存しない)
   builtin_labels = load("resource/labels")
   builtin_icons = load("resource/icons")
 
   -- service/ 下位層: I/O・外部コマンド (UI に依存しない)
+  diagnostics = load("service/diagnostics")
   agent = load("service/agent")
   worktree = load("service/worktree/init")
   worktree.setup(load("service/worktree/github"))
@@ -59,7 +71,41 @@ local function load_modules(plugin_dir, enabled_agents)
   selector = load("ui/selector/init")
   selector.setup(load("ui/selector/workspace"), load("ui/selector/worktree"), load("ui/selector/ui"))
 
-  for _, id in ipairs(enabled_agents or all_agent_ids) do
+  -- 登録対象 id を決める。enabled_agents を明示した場合はそれを尊重する (自動検出のエスケープハッチ)。
+  -- 未指定 (既定) は各エージェントの command 先頭バイナリが PATH 上に在るものだけを検出して登録し、
+  -- 未インストールのツールに設定を書いたり選択 UI に並べたりしない。
+  -- impl を一度だけ load して再利用する (検出と登録で二重 dofile しない)。
+  local impl_by_id = {}
+  local register_ids = opts.enabled_agents
+  if not register_ids then
+    local shell = os.getenv("SHELL") or "/bin/sh"
+    local candidates = {}
+    for _, id in ipairs(all_agent_ids) do
+      local impl = load("service/agents/" .. id)
+      impl_by_id[id] = impl
+      local ov = opts.agents and opts.agents[id]
+      local command = (ov and ov.command) or (impl.default_opts and impl.default_opts.command) or id
+      candidates[#candidates + 1] = { id = id, bin = agent.command_bin(command) or id }
+    end
+    local missing
+    register_ids, missing = agent.resolve_register_ids(candidates, shell)
+    if missing then
+      -- 検出 0 件は PATH 欠落 (GUI 起動で環境が継承されない等) の可能性が高い。原因を通知する。
+      -- 案内する CLI 名は candidates の bin から動的生成し、エージェント追加時の文言更新漏れを防ぐ。
+      local bins = {}
+      for _, c in ipairs(candidates) do
+        bins[#bins + 1] = c.bin
+      end
+      diagnostics.report(
+        "agents_missing",
+        "エージェントの CLI が PATH 上に見つかりませんでした (暫定で全エージェントを登録します)。"
+          .. table.concat(bins, " / ")
+          .. " のいずれかを PATH に入れて WezTerm を再起動するか、enabled_agents で明示してください"
+      )
+    end
+  end
+
+  for _, id in ipairs(register_ids) do
     local found = false
     for _, valid in ipairs(all_agent_ids) do
       if id == valid then
@@ -68,7 +114,7 @@ local function load_modules(plugin_dir, enabled_agents)
       end
     end
     if not found then error("wezterm-ai-agents: unknown agent '" .. id .. "'. Available: " .. table.concat(all_agent_ids, ", ")) end
-    agent.register(load("service/agents/" .. id))
+    agent.register(impl_by_id[id] or load("service/agents/" .. id))
   end
 end
 
@@ -81,6 +127,25 @@ local M = {
   agent = nil,
   ui = nil,
 }
+
+-- install_hooks.sh の実行結果 (ran=終了コード0か, stdout=結果行) から、
+-- ユーザーに知らせるべき失敗文言を返す (知らせる必要が無ければ nil)。原因を推測せず、
+-- sh が返した結果コードを原因別に解釈する。symlink/unknown スキップや成功は通知しない。
+local function install_hooks_diagnostic(ran, stdout)
+  stdout = stdout or ""
+  -- ユーザーが体感する機能名 (タブ等の状態表示) で、原因と次の一手を示す。内部用語と推測は使わない。
+  local headline = "エージェントの状態表示を有効化できませんでした。"
+  if stdout:find("jq-missing", 1, true) then return headline .. "jq を入れて WezTerm を再起動してください" end
+  -- 既存設定が不正な JSON で触れなかったエージェントを集める (握りつぶさず id 付きで知らせる)。
+  local broken = {}
+  for id in stdout:gmatch("skip%-invalid%-json%s+(%S+)") do
+    broken[#broken + 1] = id
+  end
+  if #broken > 0 then return headline .. "設定ファイルが壊れています: " .. table.concat(broken, ", ") end
+  if not ran then return headline .. "手動設定は README を参照してください" end
+  return nil
+end
+M._install_hooks_diagnostic = install_hooks_diagnostic
 
 -- ============== Defaults ==============
 
@@ -101,7 +166,7 @@ local default_opts = {
   nerd_font = true,
   font = nil, -- primary フォント (family 文字列 or { family=..., 属性 })。nil = JetBrains Mono。日本語フォールバックは自動付加
   status_dir = default_status_dir(),
-  enabled_agents = nil, -- nil = all; or { "claude" } to register only specific agents
+  enabled_agents = nil, -- nil = PATH 上にバイナリが在るエージェントを自動検出して登録; or { "claude" } で明示固定
   default_agent = nil, -- nil = first registered; or "claude" to set default agent for Cmd+Shift+C
   default_editor = nil, -- nil = auto-detect (code/cursor/windsurf/zed/subl); or "/usr/local/bin/cursor" etc.
   -- ターミナル出力中のファイルパスをクリックでエディタの該当行に開く (editor:// / editor-rel://)。
@@ -132,6 +197,7 @@ local default_opts = {
   install_ui_tab_title = true,
   install_ui_status = true,
   install_keybinds = true,
+  install_hooks = true,
   disabled_keybinds = {},
   keybinds = {},
   modifier_prefix = wezterm.target_triple:find("darwin") and "CMD" or "CTRL",
@@ -198,7 +264,7 @@ function M.apply(config, user_opts)
   opts.locale = opts.locale or detect_locale()
 
   local plugin_dir = detect_plugin_dir(opts.plugin_dir)
-  load_modules(plugin_dir, opts.enabled_agents)
+  load_modules(plugin_dir, opts)
   M.workspace, M.worktree, M.layout, M.selector, M.agent, M.ui = workspace, worktree, layout, selector, agent, ui
 
   if opts.default_agent and not agent.get(opts.default_agent) then
@@ -226,6 +292,31 @@ function M.apply(config, user_opts)
     -- 死んだ GUI プロセスの状態ファイル名前空間と、旧バージョンのフラット残置を回収する。
     local ok, err = pcall(agent.cleanup_dead_namespaces, opts)
     if not ok then wezterm.log_warn("[ai-agents] cleanup_dead_namespaces failed: " .. tostring(err)) end
+    -- 各エージェントの設定ファイルに状態追跡フックを冪等マージする (既定 ON)。複数回発火しても冪等。
+    -- jq 欠如・不正JSON など「知らせるべき失敗」は原因別に diagnostics へ上げる (symlink/unknown スキップは正常)。
+    -- 補助機能なので pcall で隔離し、万一の失敗 (run_child_process が bash を spawn できない等) が
+    -- 後段の update_all を巻き込まないようにする (直前の cleanup_dead_namespaces と同じ防御方針)。
+    if opts.install_hooks then
+      local hook_ok, hook_err = pcall(function()
+        local cmd = { "bash", M.hooks_dir .. "/install_hooks.sh", M.hooks_dir }
+        for _, impl in ipairs(agent.all()) do
+          cmd[#cmd + 1] = impl.id
+        end
+        local ran, stdout = wezterm.run_child_process(cmd)
+        -- 他プロダクトの設定ファイルを実際に書き換えた (applied) ものは足跡をログに残す (透明性)。
+        -- unchanged/skip は書き込みなしなので出さない。ログ止まりでタブは生やさない (ノイズ回避)。
+        local applied = {}
+        for id in (stdout or ""):gmatch("applied (%S+)") do
+          applied[#applied + 1] = id
+        end
+        if #applied > 0 then
+          wezterm.log_info("[ai-agents] install_hooks: 設定にフックを書き込みました: " .. table.concat(applied, ", "))
+        end
+        local msg = install_hooks_diagnostic(ran, stdout)
+        if msg then diagnostics.report("install_hooks", msg) end
+      end)
+      if not hook_ok then wezterm.log_warn("[ai-agents] install_hooks failed: " .. tostring(hook_err)) end
+    end
     wezterm.plugin.update_all()
   end)
 
@@ -343,6 +434,15 @@ function M.apply(config, user_opts)
       prev_pane_id[win_id] = pane_id
       if focus_changed or (now - last_status_tick) >= opts.status_update_interval then
         last_status_tick = now
+        -- 知らせるべき失敗 (window 不在の経路で溜まった分) を、専用タブを生やして表示する。
+        -- アクティブペインへの inject は TUI (alternate screen) 前面で再描画に上書きされ届かない/画面を壊すため、
+        -- 既存ペインを汚さず焦点も奪わない新規タブに出す。読了後はそのまま通常のシェルとして使える。
+        local pending = diagnostics.take_pending()
+        if #pending > 0 then
+          local body = "[wezterm-ai-agents]\n\n" .. table.concat(pending, "\n\n")
+          local cmd = "printf '%s\\n' " .. agent.shell_quote(body) .. '; exec "${SHELL:-/bin/sh}"'
+          pcall(function() window:mux_window():spawn_tab({ args = { "/bin/sh", "-c", cmd } }) end)
+        end
         local impl, agent_opts = agent.detect(pane, opts)
         if impl and impl.consume_done then pcall(impl.consume_done, pane, agent_opts) end
         local segs = ui.right_status_segments(window, pane, deps)

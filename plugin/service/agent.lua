@@ -120,6 +120,58 @@ function M.all()
   return list
 end
 
+-- 各エージェントの実行バイナリが PATH 上に在るかを 1 回のログインシェル実行で判定する。
+-- candidates: { {id=, bin=}, ... }。戻り値: インストール済み id の集合 ({ id = true })。
+-- ただしシェル実行自体に失敗した場合 (検出不能) は nil を返し、呼び出し側のフォールバックに委ねる。
+-- run はテスト差し替え用 (既定 wezterm.run_child_process)。
+function M.detect_installed(candidates, shell, run)
+  run = run or wezterm.run_child_process
+  if not candidates or #candidates == 0 then return {} end
+  -- 各 bin: 見つかったら id を 1 行出力。bin/id は単一引用符エスケープして注入を防ぐ。
+  -- command -v は PATH 上の実行ファイル/絶対パス/シェル関数のいずれでも真を返す。
+  -- if/fi で各文を完結させ、末尾候補が未検出でもスクリプト全体の exit code を 0 に保つ。
+  -- (&& 連結だと末尾未ヒットで非ゼロ終了し、検出 0 件が「シェル実行失敗 (nil)」と誤判定される)
+  local parts = {}
+  for _, c in ipairs(candidates) do
+    parts[#parts + 1] = "if command -v "
+      .. M.shell_quote(c.bin)
+      .. " >/dev/null 2>&1; then printf '%s\\n' "
+      .. M.shell_quote(c.id)
+      .. "; fi"
+  end
+  local ok, stdout = run({ shell, "-lc", table.concat(parts, "; ") })
+  if not ok then return nil end
+  local installed = {}
+  -- 既知 id の集合として扱うため、profile 由来のノイズ行が混ざっても無害。
+  for id in (stdout or ""):gmatch("[^\r\n]+") do
+    installed[id] = true
+  end
+  return installed
+end
+
+-- command 文字列から先頭バイナリ名を取り出す (例 "claude --foo" → "claude")。
+-- 検出はこのバイナリが PATH 上に在るかで判定する。先頭が取れなければ nil。
+function M.command_bin(command) return command and command:match("^%s*(%S+)") or nil end
+
+-- candidates ({id, bin, ...} の配列) から登録すべき id 配列を決める純粋関数。
+-- 戻り値: ids(登録対象配列), missing(bool)。
+--   missing=true は「検出は動いたが 1 件も見つからず全登録へフォールバックした」場合のみ
+--   (呼び出し側が agents_missing 通知を出す合図)。検出不能 (シェル失敗) は全登録だが missing=false。
+function M.resolve_register_ids(candidates, shell, run)
+  local all_ids = {}
+  for _, c in ipairs(candidates) do
+    all_ids[#all_ids + 1] = c.id
+  end
+  local installed = M.detect_installed(candidates, shell, run)
+  if installed == nil then return all_ids, false end -- 検出不能: 安全側に全登録
+  local ids = {}
+  for _, c in ipairs(candidates) do
+    if installed[c.id] then ids[#ids + 1] = c.id end
+  end
+  if #ids == 0 then return all_ids, true end -- 検出 0 件: 全登録フォールバック + 通知合図
+  return ids, false
+end
+
 -- Build per-agent opts by merging defaults + user overrides.
 -- Plugin-level status_dir is injected unless agent-specific override exists.
 function M.opts_for(agent_impl, plugin_opts)
