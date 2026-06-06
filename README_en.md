@@ -214,7 +214,7 @@ ai.apply(config, {
 ```lua
 ai.apply(config, {
   nerd_font = true,                 -- Use Nerd Font icons. Set false for Unicode fallback
-  enabled_agents = nil,             -- nil = all; or { "claude", "codex" }
+  enabled_agents = nil,             -- nil = auto-detect agents whose binary is on PATH; or { "claude", "codex" } to pin
   default_agent = nil,              -- nil = first registered; or "claude"
   default_editor = nil,             -- nil = auto-detect (code/cursor/windsurf/zed/subl); or "/usr/local/bin/cursor" etc.
   editor_links = false,             -- true: click file paths in terminal output to open them at the line in your editor

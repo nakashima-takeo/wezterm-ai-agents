@@ -60,7 +60,8 @@ plugin/
 **主要パターン:**
 - エージェント状態は hooks が pane ごとに JSON ファイルを書き込む push 方式: `$XDG_STATE_HOME/wezterm-ai-agents/<gui_pid>/wezterm-agent-<pane_id>` (GUI プロセス PID 名前空間配下。フォールバック `~/.local/state`)
 - `hooks/agent_status.sh` が書き込み側 (全エージェント共通)。Lua 側は `wezterm.json_parse()` で読み取り
-- 起動時に `hooks/install_hooks.sh` が各エージェントの設定ファイルへ agent_status.sh フックを冪等マージする (既定 ON `opts.install_hooks`、要 jq。symlink/不正 JSON はスキップ、command 単位で除去→再追加)
+- 登録するエージェントは `enabled_agents` 既定 nil のとき `agent.detect_installed` が各 command 先頭バイナリを `command -v` で検出し、PATH 上に在るものだけに絞る (未インストールツールを選択 UI や install_hooks の対象にしない)。検出不能(シェル失敗)は全登録へフォールバック、0件は登録せず diagnostics で通知。`enabled_agents` 明示時は検出せずそのまま尊重 (エスケープハッチ)
+- 起動時に `hooks/install_hooks.sh` が登録済みエージェントの設定ファイルへ agent_status.sh フックを冪等マージする (既定 ON `opts.install_hooks`、要 jq。symlink/不正 JSON はスキップ、command 単位で除去→再追加)
 - ユーザーに知らせるべき失敗は `service/diagnostics.lua` に report し、update-status でアクティブペインへ端末出力で通知する (`wezterm.log_*` はデバッグオーバーレイ止まりで届かないため)
 - PID 名前空間は書き込み側 `WEZTERM_UNIX_SOCKET` の `gui-sock-<pid>` と読み取り側 `wezterm.procinfo.pid()` が同一 GUI プロセス PID に合意する前提 (mux 内蔵の既定構成のみ。分離 mux 構成は非対応)
 - JSON 形式: `{"agent":"<id>","state":"<state>","ts":<unix>,"session_id":"<sid>"}`

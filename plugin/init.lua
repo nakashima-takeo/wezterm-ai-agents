@@ -35,7 +35,7 @@ local all_agent_ids = { "claude", "cursor", "codex", "gemini" }
 
 -- モジュールを層順 (下位→上位) にロードする。配置と並びがそのまま依存階層を表す。
 -- 下位は UI を知らず、上位 (selector/ui) が deps 経由で下位を呼ぶ。循環は引数注入で回避済み。
-local function load_modules(plugin_dir, enabled_agents)
+local function load_modules(plugin_dir, opts)
   local function load(rel) return dofile(plugin_dir .. "/plugin/" .. rel .. ".lua") end
 
   -- resource/ 下位層: データ (他に依存しない)
@@ -60,7 +60,37 @@ local function load_modules(plugin_dir, enabled_agents)
   selector = load("ui/selector/init")
   selector.setup(load("ui/selector/workspace"), load("ui/selector/worktree"), load("ui/selector/ui"))
 
-  for _, id in ipairs(enabled_agents or all_agent_ids) do
+  -- 登録対象 id を決める。enabled_agents を明示した場合はそれを尊重する (自動検出のエスケープハッチ)。
+  -- 未指定 (既定) は各エージェントの command 先頭バイナリが PATH 上に在るものだけを検出して登録し、
+  -- 未インストールのツールに設定を書いたり選択 UI に並べたりしない。
+  local register_ids = opts.enabled_agents
+  if not register_ids then
+    local shell = os.getenv("SHELL") or "/bin/sh"
+    local candidates = {}
+    for _, id in ipairs(all_agent_ids) do
+      local impl = load("service/agents/" .. id)
+      local ov = opts.agents and opts.agents[id]
+      local command = (ov and ov.command) or (impl.default_opts and impl.default_opts.command) or id
+      candidates[#candidates + 1] = { id = id, bin = command:match("^%s*(%S+)") or id }
+    end
+    local installed = agent.detect_installed(candidates, shell)
+    if installed == nil then
+      register_ids = all_agent_ids -- 検出不能 (シェル実行失敗): 安全側に全登録 (現行動作にフォールバック)
+    else
+      register_ids = {}
+      for _, c in ipairs(candidates) do
+        if installed[c.id] then register_ids[#register_ids + 1] = c.id end
+      end
+      if #register_ids == 0 then
+        diagnostics.report(
+          "agents_missing",
+          "エージェントの CLI が見つかりませんでした。claude / codex / gemini / cursor-agent のいずれかを PATH に入れて WezTerm を再起動するか、enabled_agents で明示してください"
+        )
+      end
+    end
+  end
+
+  for _, id in ipairs(register_ids) do
     local found = false
     for _, valid in ipairs(all_agent_ids) do
       if id == valid then
@@ -121,7 +151,7 @@ local default_opts = {
   nerd_font = true,
   font = nil, -- primary フォント (family 文字列 or { family=..., 属性 })。nil = JetBrains Mono。日本語フォールバックは自動付加
   status_dir = default_status_dir(),
-  enabled_agents = nil, -- nil = all; or { "claude" } to register only specific agents
+  enabled_agents = nil, -- nil = PATH 上にバイナリが在るエージェントを自動検出して登録; or { "claude" } で明示固定
   default_agent = nil, -- nil = first registered; or "claude" to set default agent for Cmd+Shift+C
   default_editor = nil, -- nil = auto-detect (code/cursor/windsurf/zed/subl); or "/usr/local/bin/cursor" etc.
   -- ターミナル出力中のファイルパスをクリックでエディタの該当行に開く (editor:// / editor-rel://)。
@@ -219,7 +249,7 @@ function M.apply(config, user_opts)
   opts.locale = opts.locale or detect_locale()
 
   local plugin_dir = detect_plugin_dir(opts.plugin_dir)
-  load_modules(plugin_dir, opts.enabled_agents)
+  load_modules(plugin_dir, opts)
   M.workspace, M.worktree, M.layout, M.selector, M.agent, M.ui = workspace, worktree, layout, selector, agent, ui
 
   if opts.default_agent and not agent.get(opts.default_agent) then

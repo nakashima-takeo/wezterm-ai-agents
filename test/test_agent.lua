@@ -51,6 +51,49 @@ test("異常系：idなしやnilの登録はエラーになる", function()
   H.assert_error(function() agent.register(nil) end)
 end)
 
+H.section("インストール検出 (detect_installed)")
+
+test("正常系：command -v で見つかった id だけが集合に入る", function()
+  local agent = load_mod("service/agent")
+  local candidates = { { id = "claude", bin = "claude" }, { id = "cursor", bin = "cursor-agent" } }
+  -- claude は見つかり cursor-agent は見つからない状況を模す。
+  local captured
+  local fake_run = function(args)
+    captured = args
+    return true, "claude\n", ""
+  end
+
+  local installed = agent.detect_installed(candidates, "/bin/sh", fake_run)
+
+  H.assert_eq(installed.claude, true)
+  H.assert_eq(installed.cursor, nil)
+  -- bin/id がシェルに渡るスクリプトへ単一引用符付きで埋まっていること。
+  H.assert_true(captured[3]:find("command %-v 'cursor%-agent'") ~= nil)
+  H.assert_true(captured[3]:find("printf '%%s\\n' 'claude'") ~= nil)
+end)
+
+test("検出不能：シェル実行が失敗したら nil を返す (呼び出し側でフォールバック)", function()
+  local agent = load_mod("service/agent")
+  local candidates = { { id = "claude", bin = "claude" } }
+  local fake_run = function() return false, "", "boom" end
+
+  H.assert_eq(agent.detect_installed(candidates, "/bin/sh", fake_run), nil)
+end)
+
+test("正常系：candidates が空なら実行せず空集合を返す", function()
+  local agent = load_mod("service/agent")
+  local called = false
+  local fake_run = function()
+    called = true
+    return true, "", ""
+  end
+
+  local installed = agent.detect_installed({}, "/bin/sh", fake_run)
+
+  H.assert_eq(next(installed), nil)
+  H.assert_eq(called, false)
+end)
+
 H.section("設定マージ")
 
 test("正常系：ユーザー設定がデフォルト設定を上書きし、未指定のデフォルトは保持される", function()

@@ -216,7 +216,7 @@ ai.apply(config, {
 ```lua
 ai.apply(config, {
   nerd_font = true,                 -- Nerd Font アイコンを使用。false で Unicode フォールバック
-  enabled_agents = nil,             -- nil = all; or { "claude", "codex" }
+  enabled_agents = nil,             -- nil = PATH 上のバイナリを自動検出; or { "claude", "codex" } で明示固定
   default_agent = nil,              -- nil = first registered; or "claude"
   default_editor = nil,             -- nil = auto-detect (code/cursor/windsurf/zed/subl); or "/usr/local/bin/cursor" etc.
   editor_links = false,             -- true でターミナル出力のファイルパスをクリック→エディタの該当行で開く
