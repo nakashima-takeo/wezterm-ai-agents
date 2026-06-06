@@ -292,6 +292,15 @@ function M.apply(config, user_opts)
           cmd[#cmd + 1] = impl.id
         end
         local ran, stdout = wezterm.run_child_process(cmd)
+        -- 他プロダクトの設定ファイルを実際に書き換えた (applied) ものは足跡をログに残す (透明性)。
+        -- unchanged/skip は書き込みなしなので出さない。ログ止まりでタブは生やさない (ノイズ回避)。
+        local applied = {}
+        for id in (stdout or ""):gmatch("applied (%S+)") do
+          applied[#applied + 1] = id
+        end
+        if #applied > 0 then
+          wezterm.log_info("[ai-agents] install_hooks: 設定にフックを書き込みました: " .. table.concat(applied, ", "))
+        end
         local msg = install_hooks_diagnostic(ran, stdout)
         if msg then diagnostics.report("install_hooks", msg) end
       end)
