@@ -183,6 +183,23 @@ test("gemini は Notification→waiting を含む", function()
   cleanup(home)
 end)
 
+test("登録エージェント全 id を渡すと skip-unknown が出ない (case 追従漏れ検知)", function()
+  local home = H.tmp_dir()
+  -- 真実源は service/agents/<id>.lua の存在。新エージェント追加時に install_hooks.sh の
+  -- case 追記を忘れると、その id が skip-unknown になりここで落ちる (CLAUDE.md 記載の既知の罠を CI で塞ぐ)。
+  local ids = {}
+  local p = io.popen("ls " .. sh(H.plugin_dir .. "/plugin/service/agents") .. " 2>/dev/null")
+  for line in p:lines() do
+    local id = line:match("^(.+)%.lua$")
+    if id then ids[#ids + 1] = id end
+  end
+  p:close()
+  H.assert_true(#ids > 0, "エージェント実装が1つ以上ある")
+  local out = run(home, hooks_dir, ids)
+  H.assert_true(not out:find("skip-unknown", 1, true), "全登録エージェントが case を持つ: " .. out)
+  cleanup(home)
+end)
+
 -- install_hooks.sh の結果 (ran, stdout) を原因別に解釈する判定ロジック。
 -- 推測 ("jq 未導入?") をやめ、sh が返した結果コードだけに基づいて文言を決める。
 H.section("install_hooks 失敗判定 (init._install_hooks_diagnostic)")
