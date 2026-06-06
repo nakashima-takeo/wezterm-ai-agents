@@ -25,12 +25,12 @@ command -v jq >/dev/null 2>&1 || {
 for id in "$@"; do
   case "$id" in
     claude)
-      file="$HOME/.claude/settings.json"
+      file="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"
       style=nested
       spec='[{"event":"SessionStart","state":"idle"},{"event":"SessionEnd","state":"clear"},{"event":"UserPromptSubmit","state":"working"},{"event":"Stop","state":"done"},{"event":"PreToolUse","state":"waiting","matcher":"AskUserQuestion"},{"event":"PostToolUse","state":"working","matcher":"AskUserQuestion"}]'
       ;;
     codex)
-      file="$HOME/.codex/hooks.json"
+      file="${CODEX_HOME:-$HOME/.codex}/hooks.json"
       style=nested
       spec='[{"event":"SessionStart","state":"idle"},{"event":"UserPromptSubmit","state":"working"},{"event":"PermissionRequest","state":"waiting"},{"event":"Stop","state":"done"}]'
       ;;
@@ -40,7 +40,7 @@ for id in "$@"; do
       spec='[{"event":"SessionStart","state":"idle"},{"event":"SessionEnd","state":"clear"},{"event":"BeforeAgent","state":"working"},{"event":"Notification","state":"waiting"},{"event":"AfterAgent","state":"done"}]'
       ;;
     cursor)
-      file="$HOME/.cursor/hooks.json"
+      file="${CURSOR_CONFIG_DIR:-$HOME/.cursor}/hooks.json"
       style=cursor
       spec='[{"event":"sessionStart","state":"unknown"},{"event":"sessionEnd","state":"clear"}]'
       ;;
