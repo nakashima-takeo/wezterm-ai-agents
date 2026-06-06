@@ -283,14 +283,19 @@ function M.apply(config, user_opts)
     if not ok then wezterm.log_warn("[ai-agents] cleanup_dead_namespaces failed: " .. tostring(err)) end
     -- 各エージェントの設定ファイルに状態追跡フックを冪等マージする (既定 ON)。複数回発火しても冪等。
     -- jq 欠如・不正JSON など「知らせるべき失敗」は原因別に diagnostics へ上げる (symlink/unknown スキップは正常)。
+    -- 補助機能なので pcall で隔離し、万一の失敗 (run_child_process が bash を spawn できない等) が
+    -- 後段の update_all を巻き込まないようにする (直前の cleanup_dead_namespaces と同じ防御方針)。
     if opts.install_hooks then
-      local cmd = { "bash", M.hooks_dir .. "/install_hooks.sh", M.hooks_dir }
-      for _, impl in ipairs(agent.all()) do
-        cmd[#cmd + 1] = impl.id
-      end
-      local ran, stdout = wezterm.run_child_process(cmd)
-      local msg = install_hooks_diagnostic(ran, stdout)
-      if msg then diagnostics.report("install_hooks", msg) end
+      local hook_ok, hook_err = pcall(function()
+        local cmd = { "bash", M.hooks_dir .. "/install_hooks.sh", M.hooks_dir }
+        for _, impl in ipairs(agent.all()) do
+          cmd[#cmd + 1] = impl.id
+        end
+        local ran, stdout = wezterm.run_child_process(cmd)
+        local msg = install_hooks_diagnostic(ran, stdout)
+        if msg then diagnostics.report("install_hooks", msg) end
+      end)
+      if not hook_ok then wezterm.log_warn("[ai-agents] install_hooks failed: " .. tostring(hook_err)) end
     end
     wezterm.plugin.update_all()
   end)
