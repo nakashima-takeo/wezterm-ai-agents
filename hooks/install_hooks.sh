@@ -63,6 +63,9 @@ for id in "$@"; do
       continue
     fi
     current=$(cat "$file")
+    # 空/空白のみのファイルは jq empty を通過してしまう (current="" のまま後段が空出力になり
+    # before==after で unchanged に化け、フックが無言で未設定になる)。非存在ファイルと同じ {} 扱いにする。
+    [ -z "${current//[[:space:]]/}" ] && current='{}'
   else
     current='{}'
   fi

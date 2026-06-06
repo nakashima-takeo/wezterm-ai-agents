@@ -88,6 +88,16 @@ test("不正 JSON はスキップし、内容を変更しない", function()
   cleanup(home)
 end)
 
+test("空/空白のみの設定ファイルは {} 扱いで applied になる (unchanged に化けない)", function()
+  local home = H.tmp_dir()
+  os.execute("mkdir -p " .. sh(home .. "/.claude"))
+  H.write_file(home .. "/.claude/settings.json", "  \n\t")
+  local out = run(home, hooks_dir, { "claude" })
+  H.assert_match(out, "applied claude")
+  H.assert_match(H.read_file(home .. "/.claude/settings.json"), "agent_status.sh claude idle")
+  cleanup(home)
+end)
+
 test("スペースを含む hooks_dir でも冪等 (.bak が増えない)", function()
   local home = H.tmp_dir()
   local dir = home .. "/h o o k s"
