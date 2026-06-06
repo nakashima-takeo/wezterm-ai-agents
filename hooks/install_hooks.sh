@@ -124,8 +124,9 @@ for id in "$@"; do
 
   parent=$(dirname "$file")
   mkdir -p "$parent"
-  # 初回のみ原本を退避する。以降の再適用では上書きせず最初の原本を保つ (復元元が改変済みにならない)。
-  [ -f "$file" ] && [ ! -f "$file.bak" ] && cp "$file" "$file.bak"
+  # tmp + mv のアトミック書き込み。jq 変換失敗時は mv に到達せず、mv は成功(新内容)か無変更の
+  # どちらかなので途中破損が起きない。マージ自体も他キー/他フックを保持する非破壊処理のため、
+  # バックアップ (.bak) は作らない (外部ツールの設定ディレクトリに残骸を残さない)。
   tmp="$file.tmp.$$"
   printf '%s\n' "$result" >"$tmp" && mv "$tmp" "$file"
   echo "applied $id"

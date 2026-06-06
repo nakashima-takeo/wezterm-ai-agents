@@ -83,7 +83,7 @@ Agent state detection works by registering the bundled `hooks/agent_status.sh` i
 
 How the automatic setup behaves:
 
-- It never breaks existing settings. Only its own entries are added/updated idempotently; other hooks and config keys are preserved. A `.bak` is left for any file that changes.
+- It never breaks existing settings. Only its own entries are added/updated idempotently; other hooks and config keys are preserved. Writes are atomic via a temp file.
 - If the config file is a **symlink** (e.g. managed by dotfiles), it is skipped. Use the manual setup below in that case.
 - If `jq` is missing, or an existing file is invalid JSON, it is skipped. A notification is shown on startup when `jq` is missing.
 - Set `install_hooks = false` to disable the automatic setup.
