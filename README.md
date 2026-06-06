@@ -96,6 +96,8 @@ ai.apply(config, { plugin_dir = plugin_dir })
 
 symlink で管理している・`jq` が無い・`install_hooks = false` にしたなどで自動設定を使わない場合は、以下の手順で手動設定します。
 
+> **注**: 各エージェントの event→state マッピングの真実源は [`hooks/install_hooks.sh`](hooks/install_hooks.sh) の `spec` です。以下の手動設定例は二次情報のため、差異がある場合はスクリプトを優先してください。
+
 ### hooks パスの確認
 
 `ai.apply()` 実行時に hooks ディレクトリのパスがログに出力されます。

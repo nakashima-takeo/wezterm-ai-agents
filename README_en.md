@@ -94,6 +94,8 @@ The script writes state as JSON to `$XDG_STATE_HOME/wezterm-ai-agents/<gui_pid>/
 
 If you don't use the automatic setup (symlinked config, no `jq`, or `install_hooks = false`), configure it manually as follows.
 
+> **Note**: The source of truth for each agent's event→state mapping is the `spec` in [`hooks/install_hooks.sh`](hooks/install_hooks.sh). The manual examples below are secondary; if they differ, the script wins.
+
 ### Finding the hooks path
 
 The hooks directory path is logged automatically when `ai.apply()` runs.
