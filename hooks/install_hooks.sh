@@ -124,7 +124,8 @@ for id in "$@"; do
 
   parent=$(dirname "$file")
   mkdir -p "$parent"
-  [ -f "$file" ] && cp "$file" "$file.bak" # 変更時のみバックアップ
+  # 初回のみ原本を退避する。以降の再適用では上書きせず最初の原本を保つ (復元元が改変済みにならない)。
+  [ -f "$file" ] && [ ! -f "$file.bak" ] && cp "$file" "$file.bak"
   tmp="$file.tmp.$$"
   printf '%s\n' "$result" >"$tmp" && mv "$tmp" "$file"
   echo "applied $id"
