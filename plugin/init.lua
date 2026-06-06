@@ -409,10 +409,14 @@ function M.apply(config, user_opts)
       prev_pane_id[win_id] = pane_id
       if focus_changed or (now - last_status_tick) >= opts.status_update_interval then
         last_status_tick = now
-        -- 知らせるべき失敗 (window 不在の経路で溜まった分) を、アクティブペインへ端末出力する。
-        -- 通常の出力としてスクロールバックに残り、ユーザーは Ctrl+L 等で消せる。
-        for _, msg in ipairs(diagnostics.take_pending()) do
-          pcall(function() pane:inject_output("\r\n\27[33m[wezterm-ai-agents] " .. msg .. "\27[0m\r\n") end)
+        -- 知らせるべき失敗 (window 不在の経路で溜まった分) を、専用タブを生やして表示する。
+        -- アクティブペインへの inject は TUI (alternate screen) 前面で再描画に上書きされ届かない/画面を壊すため、
+        -- 既存ペインを汚さず焦点も奪わない新規タブに出す。読了後はそのまま通常のシェルとして使える。
+        local pending = diagnostics.take_pending()
+        if #pending > 0 then
+          local body = "[wezterm-ai-agents]\n\n" .. table.concat(pending, "\n\n")
+          local cmd = "printf '%s\\n' " .. agent.shell_quote(body) .. '; exec "${SHELL:-/bin/sh}"'
+          pcall(function() window:mux_window():spawn_tab({ args = { "/bin/sh", "-c", cmd } }) end)
         end
         local impl, agent_opts = agent.detect(pane, opts)
         if impl and impl.consume_done then pcall(impl.consume_done, pane, agent_opts) end
