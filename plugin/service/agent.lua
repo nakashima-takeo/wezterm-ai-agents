@@ -129,9 +129,15 @@ function M.detect_installed(candidates, shell, run)
   if not candidates or #candidates == 0 then return {} end
   -- 各 bin: 見つかったら id を 1 行出力。bin/id は単一引用符エスケープして注入を防ぐ。
   -- command -v は PATH 上の実行ファイル/絶対パス/シェル関数のいずれでも真を返す。
+  -- if/fi で各文を完結させ、末尾候補が未検出でもスクリプト全体の exit code を 0 に保つ。
+  -- (&& 連結だと末尾未ヒットで非ゼロ終了し、検出 0 件が「シェル実行失敗 (nil)」と誤判定される)
   local parts = {}
   for _, c in ipairs(candidates) do
-    parts[#parts + 1] = "command -v " .. M.shell_quote(c.bin) .. " >/dev/null 2>&1 && printf '%s\\n' " .. M.shell_quote(c.id)
+    parts[#parts + 1] = "if command -v "
+      .. M.shell_quote(c.bin)
+      .. " >/dev/null 2>&1; then printf '%s\\n' "
+      .. M.shell_quote(c.id)
+      .. "; fi"
   end
   local ok, stdout = run({ shell, "-lc", table.concat(parts, "; ") })
   if not ok then return nil end

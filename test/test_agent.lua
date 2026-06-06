@@ -94,6 +94,24 @@ test("正常系：candidates が空なら実行せず空集合を返す", functi
   H.assert_eq(called, false)
 end)
 
+test("組み立て：各文を if/fi で完結させ exit code に検出結果を載せない", function()
+  local agent = load_mod("service/agent")
+  -- 末尾候補が未検出でもスクリプト全体が非ゼロ終了しない (= nil 誤判定を防ぐ) ことを構造で保証する。
+  local candidates = { { id = "claude", bin = "claude" }, { id = "gemini", bin = "gemini" } }
+  local captured
+  local fake_run = function(args)
+    captured = args
+    return true, "claude\n", ""
+  end
+
+  local installed = agent.detect_installed(candidates, "/bin/sh", fake_run)
+
+  H.assert_eq(installed.claude, true)
+  -- 末尾候補を含め各文が if ...; then ...; fi で閉じ、&& 連結 (末尾未ヒットで非ゼロ終了) を使わないこと。
+  H.assert_true(captured[3]:find("if command %-v 'gemini'.-; fi$") ~= nil)
+  H.assert_eq(captured[3]:find("&& printf"), nil)
+end)
+
 H.section("設定マージ")
 
 test("正常系：ユーザー設定がデフォルト設定を上書きし、未指定のデフォルトは保持される", function()
