@@ -56,7 +56,7 @@ func readAgentStates(dir string) map[int]AgentStatus {
 		if json.Unmarshal(data, &st) != nil {
 			continue
 		}
-		st.PaneID = idStr
+		st.PaneID = id
 		out[id] = st
 	}
 	return out
@@ -161,7 +161,7 @@ func diffStates(prev, cur map[int]paneSnap) []EventChange {
 // lets the next call catch any change that happened while the orchestrator was reasoning.
 type watcher struct {
 	mu       sync.Mutex
-	baseline map[int]paneSnap // nil until the first wait_for_event call (which self-primes)
+	baseline map[int]paneSnap // nil on the first call: it returns the current managed set as the initial events, then tracks deltas
 }
 
 const (

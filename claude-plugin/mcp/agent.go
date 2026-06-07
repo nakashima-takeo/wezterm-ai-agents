@@ -9,7 +9,7 @@ import (
 )
 
 type AgentStatus struct {
-	PaneID    string `json:"pane_id"`
+	PaneID    int    `json:"pane_id"`
 	Agent     string `json:"agent"`
 	State     string `json:"state"`
 	Timestamp int64  `json:"ts"`

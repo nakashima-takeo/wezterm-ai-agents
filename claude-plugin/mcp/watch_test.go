@@ -62,7 +62,7 @@ func TestReadAgentStates(t *testing.T) {
 		t.Fatalf("expected 1 state (.tmp ignored), got %d", len(states))
 	}
 	st := states[3]
-	if st.Agent != "claude" || st.State != "waiting" || st.PaneID != "3" {
+	if st.Agent != "claude" || st.State != "waiting" || st.PaneID != 3 {
 		t.Errorf("unexpected state: %+v", st)
 	}
 }
