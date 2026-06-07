@@ -172,8 +172,8 @@ local default_opts = {
   auto_orchestrator = true,
   -- オーケストレーターを起動する claude 本体＋フラグ (スラッシュコマンドはプラグインが付けるので不要)。
   orchestrator_command = "claude --dangerously-skip-permissions",
-  -- 任意。監督エージェントに固定で渡すシステムプロンプト (--append-system-prompt として付与)。複数行可。
-  orchestrator_system_prompt = nil,
+  -- orchestrator_system_prompt は既定なし (未設定)。監督エージェントに固定システムプロンプトを
+  -- 渡したい時だけ opts に文字列を設定する (--append-system-prompt として付与。examples/custom.lua 参照)。
   enabled_agents = nil, -- nil = PATH 上にバイナリが在るエージェントを自動検出して登録; or { "claude" } で明示固定
   default_agent = nil, -- nil = first registered; or "claude" to set default agent for Cmd+Shift+C
   default_editor = nil, -- nil = auto-detect (code/cursor/windsurf/zed/subl); or "/usr/local/bin/cursor" etc.
@@ -466,7 +466,10 @@ function M.apply(config, user_opts)
         last_sync_tick = now
         pcall(workspace.sync_all, opts.workspace, agent, layout, opts)
         -- 生存 pane に対応しない孤立状態ファイルを掃除する (reaping を失った分を継続的に解消)。
-        pcall(agent.sweep_orphan_files, opts)
+        -- 同じ生存 pane 集合で監督集合からも閉じたペインを剪定する。これがないと閉じたペインが
+        -- managed.json に残り続け、オーケストレーターの「監督集合が空なら終了」が成立しない。
+        local ok, live = pcall(agent.sweep_orphan_files, opts)
+        if ok and live then pcall(managed.prune, opts.managed_file, live) end
       end
     end)
   end

@@ -264,6 +264,8 @@ function M.resolve(pane_id, plugin_opts) return resolve_in_dirs(pane_id, candida
 
 -- 自プロセスの閉じたペインの孤立状態ファイルを掃除する。candidate_dirs は自 PID 名前空間配下
 -- なので、他プロセスのファイルには構造的に触れない。定期 sync と同じタイミングで実行する。
+-- 生存 pane 集合 ({ [tostring(pane_id)] = true }) を返す。空集合ガードに掛かった場合は nil
+-- (= 生存状況を判定できない) を返し、呼び出し側が誤って全削除に倒れるのを防ぐ。
 function M.sweep_orphan_files(plugin_opts)
   -- 生存 pane 集合。pane_id は mux 内で大域一意なので全 window/workspace を合算した 1 集合でよい。
   -- ファイル名から抽出する文字列 id と型を揃えるため tostring で文字列化する。
@@ -289,6 +291,7 @@ function M.sweep_orphan_files(plugin_opts)
       end
     end
   end
+  return live
 end
 
 -- 名前空間 dir (中はフラットな状態ファイルのみ) を中身ごと削除する。

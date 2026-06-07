@@ -39,6 +39,23 @@ H.test("invalid json reads as empty set", function()
   H.assert_eq(next(managed.read(file)), nil, "empty on parse failure")
 end)
 
+H.test("prune drops ids whose pane is no longer live", function()
+  local file = H.tmp_dir() .. "/managed.json"
+  managed.write(file, { [3] = true, [6] = true, [9] = true })
+  managed.prune(file, { ["3"] = true, ["9"] = true }) -- pane 6 is gone
+  local set = managed.read(file)
+  H.assert_true(set[3], "3 kept")
+  H.assert_nil(set[6], "6 pruned")
+  H.assert_true(set[9], "9 kept")
+end)
+
+H.test("prune with nil live set leaves the file untouched", function()
+  local file = H.tmp_dir() .. "/managed.json"
+  managed.write(file, { [3] = true })
+  managed.prune(file, nil) -- liveness unknown -> do not prune
+  H.assert_true(managed.read(file)[3], "3 still present")
+end)
+
 H.test("orchestrator pane id round-trips and clears", function()
   local file = H.tmp_dir() .. "/orchestrator"
   H.assert_nil(managed.read_orchestrator(file), "absent initially")

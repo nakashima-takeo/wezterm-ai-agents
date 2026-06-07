@@ -82,6 +82,24 @@ end
 
 function M.is_managed(file, pane_id) return M.read(file)[pane_id] == true end
 
+-- Drop managed ids whose pane is no longer alive. Without this, a closed pane lingers in the
+-- set forever (toggle-off is the only other removal path), so the orchestrator's "set is empty"
+-- termination condition never holds and get_agents reports the closed pane as "unknown".
+-- `live` is the { [tostring(pane_id)] = true } set from agent.sweep_orphan_files; nil means the
+-- liveness could not be determined, so we leave the set untouched. Only writes back on change.
+function M.prune(file, live)
+  if type(live) ~= "table" then return end
+  local set = M.read(file)
+  local changed = false
+  for id in pairs(set) do
+    if not live[tostring(id)] then
+      set[id] = nil
+      changed = true
+    end
+  end
+  if changed then M.write(file, set) end
+end
+
 -- Orchestrator pane tracking. The Lua side records which pane runs the supervisor so it can
 -- avoid duplicate launches, respawn after a manual close, and exclude it from the console.
 -- Stored as a plain pane id in a sibling file under the same GUI-pid namespace.
