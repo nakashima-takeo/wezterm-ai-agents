@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os/exec"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -95,6 +96,14 @@ func keyPayload(key string, count int) (string, bool) {
 }
 
 func registerPaneTools(s *server.MCPServer, cfg *Config) {
+	// Derive the spawn_agent enum from the configured agents so names added via
+	// WEZTERM_MCP_AGENT_<NAME> are accepted instead of rejected by a fixed enum.
+	agentNames := make([]string, 0, len(cfg.Agents))
+	for name := range cfg.Agents {
+		agentNames = append(agentNames, name)
+	}
+	sort.Strings(agentNames)
+
 	s.AddTool(
 		mcp.NewTool("list_panes",
 			mcp.WithDescription("List all WezTerm windows, tabs, and panes with their workspace, title, cwd, and active state"),
@@ -114,8 +123,8 @@ func registerPaneTools(s *server.MCPServer, cfg *Config) {
 			mcp.WithDescription("Spawn an AI agent in a new WezTerm tab. Returns the new pane ID."),
 			mcp.WithString("agent",
 				mcp.Required(),
-				mcp.Description("Agent name: claude, codex, gemini, cursor"),
-				mcp.Enum("claude", "codex", "gemini", "cursor"),
+				mcp.Description("Agent name (one of the configured agents, e.g. claude, codex, gemini, cursor)"),
+				mcp.Enum(agentNames...),
 			),
 			mcp.WithString("cwd",
 				mcp.Description("Working directory for the agent"),
