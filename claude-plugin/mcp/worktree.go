@@ -124,14 +124,22 @@ func registerWorktreeTools(s *server.MCPServer) {
 				wtPath = filepath.Join(filepath.Dir(root), safeBranch)
 			}
 
+			// Reject leading-hyphen branch names: with -b they would be parsed as git options.
+			// Positional paths/branches are guarded with "--" instead (mirrors plugin/service/worktree/init.lua).
+			if newBranch && strings.HasPrefix(branch, "-") {
+				return mcp.NewToolResultError(fmt.Sprintf("invalid branch name: %q", branch)), nil
+			}
+
 			args := []string{"-C", root, "worktree", "add"}
 			if newBranch {
-				args = append(args, "-b", branch, wtPath)
+				args = append(args, "-b", branch)
 				if source != "" {
-					args = append(args, source)
+					args = append(args, "--", wtPath, source)
+				} else {
+					args = append(args, "--", wtPath)
 				}
 			} else {
-				args = append(args, wtPath, branch)
+				args = append(args, "--", wtPath, branch)
 			}
 
 			cmd := exec.Command("git", args...)
@@ -159,11 +167,18 @@ func registerWorktreeTools(s *server.MCPServer) {
 			wtPath, _ := req.RequireString("path")
 			force := req.GetBool("force", false)
 
-			args := []string{"worktree", "remove"}
+			// Resolve the repository root from the worktree path itself so removal does not depend
+			// on the MCP server process cwd (which is undefined under stdio launch).
+			root, err := gitRoot(wtPath)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			args := []string{"-C", root, "worktree", "remove"}
 			if force {
 				args = append(args, "--force")
 			}
-			args = append(args, wtPath)
+			args = append(args, "--", wtPath)
 
 			cmd := exec.Command("git", args...)
 			out, err := cmd.CombinedOutput()
