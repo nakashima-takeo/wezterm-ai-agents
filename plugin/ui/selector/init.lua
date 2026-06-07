@@ -30,9 +30,11 @@ end
 function M.agent_selector(window, pane, deps)
   local opts = deps.opts
   local agents = deps.agent.all()
+  local icon = (opts.icons and opts.icons.agent) or ""
+  local prefix = icon ~= "" and (icon .. " ") or ""
   local choices = {}
   for _, impl in ipairs(agents) do
-    table.insert(choices, { id = impl.id, label = "\xEF\x91\x8A " .. impl.display_name })
+    table.insert(choices, { id = impl.id, label = prefix .. impl.display_name })
   end
 
   window:perform_action(
