@@ -82,4 +82,26 @@ end
 
 function M.is_managed(file, pane_id) return M.read(file)[pane_id] == true end
 
+-- Orchestrator pane tracking. The Lua side records which pane runs the supervisor so it can
+-- avoid duplicate launches, respawn after a manual close, and exclude it from the console.
+-- Stored as a plain pane id in a sibling file under the same GUI-pid namespace.
+function M.read_orchestrator(file)
+  local f = io.open(file, "r")
+  if not f then return nil end
+  local raw = f:read("*a")
+  f:close()
+  return tonumber((raw or ""):match("%d+"))
+end
+
+function M.write_orchestrator(file, pane_id)
+  if not pane_id then
+    os.remove(file)
+    return
+  end
+  local f = io.open(file, "w")
+  if not f then return end
+  f:write(tostring(pane_id))
+  f:close()
+end
+
 return M

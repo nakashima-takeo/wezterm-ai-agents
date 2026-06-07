@@ -39,4 +39,13 @@ H.test("invalid json reads as empty set", function()
   H.assert_eq(next(managed.read(file)), nil, "empty on parse failure")
 end)
 
+H.test("orchestrator pane id round-trips and clears", function()
+  local file = H.tmp_dir() .. "/orchestrator"
+  H.assert_nil(managed.read_orchestrator(file), "absent initially")
+  managed.write_orchestrator(file, 12)
+  H.assert_eq(managed.read_orchestrator(file), 12, "stored")
+  managed.write_orchestrator(file, nil)
+  H.assert_nil(managed.read_orchestrator(file), "cleared")
+end)
+
 H.finish()

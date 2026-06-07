@@ -168,6 +168,9 @@ local default_opts = {
   nerd_font = true,
   font = nil, -- primary フォント (family 文字列 or { family=..., 属性 })。nil = JetBrains Mono。日本語フォールバックは自動付加
   status_dir = default_status_dir(),
+  -- 司令塔 (CMD+SHIFT+M) で監督対象が空→非空になった時、supervise オーケストレーターを最左タブで自動起動する。
+  auto_orchestrator = true,
+  orchestrator_command = 'claude --dangerously-skip-permissions "/wezterm-ai-agents:supervise"',
   enabled_agents = nil, -- nil = PATH 上にバイナリが在るエージェントを自動検出して登録; or { "claude" } で明示固定
   default_agent = nil, -- nil = first registered; or "claude" to set default agent for Cmd+Shift+C
   default_editor = nil, -- nil = auto-detect (code/cursor/windsurf/zed/subl); or "/usr/local/bin/cursor" etc.
@@ -269,8 +272,10 @@ function M.apply(config, user_opts)
   load_modules(plugin_dir, opts)
   M.workspace, M.worktree, M.layout, M.selector, M.agent, M.ui, M.managed = workspace, worktree, layout, selector, agent, ui, managed
 
-  -- 監督集合ファイル。状態ファイルと同じ GUI pid 名前空間配下に置き、cleanup_dead_namespaces で一緒に回収される。
+  -- 監督集合ファイルと、起動中オーケストレーターの pane_id ファイル。状態ファイルと同じ GUI pid
+  -- 名前空間配下に置き、cleanup_dead_namespaces で一緒に回収される。
   opts.managed_file = agent.ns_dir(opts.status_dir) .. "/managed.json"
+  opts.orchestrator_file = agent.ns_dir(opts.status_dir) .. "/orchestrator"
 
   if opts.default_agent and not agent.get(opts.default_agent) then
     wezterm.log_error(
