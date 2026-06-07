@@ -41,6 +41,27 @@ func TestSendTextSteps(t *testing.T) {
 	}
 }
 
+func TestKeyPayload(t *testing.T) {
+	if p, ok := keyPayload("ctrl-c", 1); !ok || p != "\x03" {
+		t.Errorf("ctrl-c = %q ok=%v, want \\x03", p, ok)
+	}
+	if p, ok := keyPayload("enter", 1); !ok || p != "\r" {
+		t.Errorf("enter = %q", p)
+	}
+	if p, ok := keyPayload("down", 3); !ok || p != "\x1b[B\x1b[B\x1b[B" {
+		t.Errorf("down x3 = %q, want triple CSI B", p)
+	}
+	if _, ok := keyPayload("nope", 1); ok {
+		t.Errorf("unknown key should return ok=false")
+	}
+	if p, _ := keyPayload("up", 0); p != "\x1b[A" {
+		t.Errorf("count<1 should clamp to 1, got %q", p)
+	}
+	if p, _ := keyPayload("space", 100); len(p) != 50 {
+		t.Errorf("count>50 should clamp to 50, got len %d", len(p))
+	}
+}
+
 func TestStripAnsiEscapes(t *testing.T) {
 	tests := []struct {
 		name  string

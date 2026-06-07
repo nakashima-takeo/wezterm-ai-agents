@@ -38,6 +38,49 @@ func sendTextSteps(paneID int, text string, submit, noPaste bool) []sendStep {
 	return steps
 }
 
+// keyBytes maps named keys to the raw byte sequences a terminal app receives. Arrow/nav keys
+// use CSI sequences (the common default); control chords use their C0 byte. Sent via
+// `wezterm cli send-text --no-paste` so the TUI sees a real keypress, not pasted text.
+var keyBytes = map[string]string{
+	"enter":     "\r",
+	"escape":    "\x1b",
+	"tab":       "\t",
+	"backspace": "\x7f",
+	"space":     " ",
+	"up":        "\x1b[A",
+	"down":      "\x1b[B",
+	"right":     "\x1b[C",
+	"left":      "\x1b[D",
+	"home":      "\x1b[H",
+	"end":       "\x1b[F",
+	"pageup":    "\x1b[5~",
+	"pagedown":  "\x1b[6~",
+	"ctrl-c":    "\x03",
+	"ctrl-d":    "\x04",
+	"ctrl-z":    "\x1a",
+	"ctrl-a":    "\x01",
+	"ctrl-e":    "\x05",
+	"ctrl-k":    "\x0b",
+	"ctrl-u":    "\x15",
+	"ctrl-w":    "\x17",
+	"ctrl-l":    "\x0c",
+}
+
+// keyPayload returns the bytes for a named key repeated count times (clamped to 1..50).
+func keyPayload(key string, count int) (string, bool) {
+	b, ok := keyBytes[key]
+	if !ok {
+		return "", false
+	}
+	if count < 1 {
+		count = 1
+	}
+	if count > 50 {
+		count = 50
+	}
+	return strings.Repeat(b, count), true
+}
+
 func registerPaneTools(s *server.MCPServer, cfg *Config) {
 	s.AddTool(
 		mcp.NewTool("list_panes",
@@ -185,6 +228,41 @@ func registerPaneTools(s *server.MCPServer, cfg *Config) {
 				}
 			}
 			return mcp.NewToolResultText(fmt.Sprintf("Text sent to pane %d", paneID)), nil
+		},
+	)
+
+	s.AddTool(
+		mcp.NewTool("send_key",
+			mcp.WithDescription("Send a named key or control chord to a WezTerm pane as a raw keypress (not pasted text). Use this for what send_text cannot do: interrupt a runaway agent (ctrl-c), dismiss/cancel a prompt (escape), navigate TUI menus (up/down then enter), etc."),
+			mcp.WithInteger("pane_id",
+				mcp.Required(),
+				mcp.Description("The target pane ID"),
+			),
+			mcp.WithString("key",
+				mcp.Required(),
+				mcp.Description("The key to send"),
+				mcp.Enum("enter", "escape", "tab", "backspace", "space",
+					"up", "down", "left", "right", "home", "end", "pageup", "pagedown",
+					"ctrl-c", "ctrl-d", "ctrl-z", "ctrl-a", "ctrl-e", "ctrl-k", "ctrl-u", "ctrl-w", "ctrl-l"),
+			),
+			mcp.WithInteger("count",
+				mcp.Description("How many times to send the key (e.g. down x3 to move in a menu). Default 1."),
+			),
+		),
+		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			paneID, _ := req.RequireInt("pane_id")
+			key, _ := req.RequireString("key")
+			count := req.GetInt("count", 1)
+			payload, ok := keyPayload(key, count)
+			if !ok {
+				return mcp.NewToolResultError(fmt.Sprintf("unknown key: %s", key)), nil
+			}
+			cmd := exec.Command("wezterm", "cli", "send-text", "--pane-id", strconv.Itoa(paneID), "--no-paste")
+			cmd.Stdin = bytes.NewReader([]byte(payload))
+			if err := cmd.Run(); err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("send-key failed: %v", err)), nil
+			}
+			return mcp.NewToolResultText(fmt.Sprintf("Sent %s x%d to pane %d", key, count, paneID)), nil
 		},
 	)
 }
