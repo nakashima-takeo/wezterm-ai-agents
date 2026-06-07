@@ -206,6 +206,10 @@ local default_opts = {
   install_ui_status = true,
   install_keybinds = true,
   install_hooks = true,
+  -- MCP サーバーバイナリを起動時にプロビジョンする (Release から DL、無ければ go build フォールバック)。
+  install_mcp = true,
+  mcp_repo = "https://github.com/nakashima-takeo/wezterm-ai-agents",
+  mcp_version = nil, -- nil = "v"..version を使う。固定したいときのみ明示 ("v0.12.0" / "latest")
   disabled_keybinds = {},
   keybinds = {},
   modifier_prefix = wezterm.target_triple:find("darwin") and "CMD" or "CTRL",
@@ -329,6 +333,21 @@ function M.apply(config, user_opts)
         if msg then diagnostics.report("install_hooks", msg) end
       end)
       if not hook_ok then wezterm.log_warn("[ai-agents] install_hooks failed: " .. tostring(hook_err)) end
+    end
+    -- MCP サーバーバイナリを共有パス ($XDG_STATE_HOME/wezterm-ai-agents/bin) に用意する。
+    -- Release から DL、無ければ go build フォールバック。背景実行で UI を止めない。
+    if opts.install_mcp then
+      pcall(
+        function()
+          wezterm.background_child_process({
+            "bash",
+            M.hooks_dir .. "/install_mcp.sh",
+            opts.mcp_repo,
+            opts.mcp_version or ("v" .. M.version),
+            plugin_dir .. "/claude-plugin/mcp",
+          })
+        end
+      )
     end
     wezterm.plugin.update_all()
   end)

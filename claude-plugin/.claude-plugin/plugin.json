@@ -6,6 +6,5 @@
   "repository": "https://github.com/nakashima-takeo/wezterm-ai-agents",
   "keywords": ["wezterm", "mcp", "agents", "orchestrator"],
   "mcpServers": "./.mcp.json",
-  "hooks": "./hooks/hooks.json",
   "skills": "./skills/"
 }

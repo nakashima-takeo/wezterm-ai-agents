@@ -1,7 +1,8 @@
 {
   "mcpServers": {
     "wezterm": {
-      "command": "${CLAUDE_PLUGIN_ROOT}/mcp/wezterm-mcp"
+      "command": "sh",
+      "args": ["-c", "exec \"${XDG_STATE_HOME:-$HOME/.local/state}/wezterm-ai-agents/bin/wezterm-mcp\""]
     }
   }
 }
