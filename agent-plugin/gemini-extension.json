@@ -1,0 +1,11 @@
+{
+  "name": "wezterm-ai-agents",
+  "version": "0.1.0",
+  "description": "WezTerm のワークスペース・worktree・並列エージェントを操作し、監督オーケストレーターを動かす",
+  "mcpServers": {
+    "wezterm": {
+      "command": "sh",
+      "args": ["-c", "exec \"${XDG_STATE_HOME:-$HOME/.local/state}/wezterm-ai-agents/bin/wezterm-mcp\""]
+    }
+  }
+}
