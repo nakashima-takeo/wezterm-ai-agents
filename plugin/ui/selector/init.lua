@@ -13,15 +13,15 @@ local M = {}
 
 M.pinned_windows = {}
 
-local sel_ws, sel_wt, sel_ui, sel_swarm
+local sel_ws, sel_wt, sel_ui, sel_cc
 
 -- plugin/init.lua から各サブモジュールを受け取り結線する。
--- 共有 UI ヘルパーを workspace/worktree/swarm の各 UI に注入し、maybe_prefetch を再エクスポートする。
-function M.setup(ws, wt, ui, swarm)
-  sel_ws, sel_wt, sel_ui, sel_swarm = ws, wt, ui, swarm
+-- 共有 UI ヘルパーを workspace/worktree/command_center の各 UI に注入し、maybe_prefetch を再エクスポートする。
+function M.setup(ws, wt, ui, command_center)
+  sel_ws, sel_wt, sel_ui, sel_cc = ws, wt, ui, command_center
   ws.setup(ui)
   wt.setup(ui)
-  swarm.setup(ui)
+  command_center.setup(ui)
   M.maybe_prefetch = wt.maybe_prefetch
 end
 
@@ -248,12 +248,12 @@ function M.build_keybinds(deps)
     end),
   }, { group = "help_group_window", desc = "help_pin_toggle", runnable = true })
 
-  -- Swarm console (toggle which agent panes the orchestrator supervises)
-  add("swarm_overview", {
+  -- Command center (toggle which agent panes the orchestrator supervises)
+  add("command_center", {
     key = "M",
     mods = "CMD|SHIFT",
-    action = wezterm.action_callback(function(window, pane) sel_swarm.swarm_overview(window, pane, deps) end),
-  }, { group = "help_group_swarm", desc = "help_swarm_overview", runnable = true })
+    action = wezterm.action_callback(function(window, pane) sel_cc.open(window, pane, deps) end),
+  }, { group = "help_group_command_center", desc = "help_command_center", runnable = true })
 
   -- Help (keybind cheatsheet, generated from the bindings above)
   add("help", {

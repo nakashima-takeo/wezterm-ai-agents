@@ -70,7 +70,7 @@ local function load_modules(plugin_dir, opts)
   -- ui/ 上位層: UI・オーケストレーション (deps 経由で下位/中位を呼ぶ)
   ui = load("ui/ui")
   selector = load("ui/selector/init")
-  selector.setup(load("ui/selector/workspace"), load("ui/selector/worktree"), load("ui/selector/ui"), load("ui/selector/swarm"))
+  selector.setup(load("ui/selector/workspace"), load("ui/selector/worktree"), load("ui/selector/ui"), load("ui/selector/command_center"))
 
   -- 登録対象 id を決める。enabled_agents を明示した場合はそれを尊重する (自動検出のエスケープハッチ)。
   -- 未指定 (既定) は各エージェントの command 先頭バイナリが PATH 上に在るものだけを検出して登録し、

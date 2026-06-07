@@ -1,4 +1,4 @@
--- Swarm console overlay: lists every agent pane and lets the human toggle which ones are
+-- Command center (司令塔) overlay: lists every agent pane and lets the human toggle which ones are
 -- supervised by the orchestrator. Supervised (✓) and unsupervised (○) are shown in separate
 -- sections; selecting a pane flips its membership and re-opens the console so multiple panes
 -- can be toggled in place. The always-on tab/right-status carry the ambient cue and stay unchanged.
@@ -57,11 +57,11 @@ local function row_choice(r)
   return { id = "pane:" .. r.pane_id, label = wezterm.format(fmt) }
 end
 
-function M.swarm_overview(window, pane, deps)
+function M.open(window, pane, deps)
   local L = deps.opts.labels
   local rows = collect_rows(deps)
   if #rows == 0 then
-    ui.toast(window, L.swarm_empty)
+    ui.toast(window, L.cc_empty)
     return
   end
 
@@ -78,12 +78,12 @@ function M.swarm_overview(window, pane, deps)
       table.insert(choices, row_choice(r))
     end
   end
-  add_section(L.swarm_supervised, supervised)
-  add_section(L.swarm_unsupervised, unsupervised)
+  add_section(L.cc_supervised, supervised)
+  add_section(L.cc_unsupervised, unsupervised)
 
   window:perform_action(
     act.InputSelector({
-      title = "Swarm",
+      title = "司令塔",
       choices = choices,
       fuzzy = true,
       action = wezterm.action_callback(function(iw, ip, id)
@@ -92,7 +92,7 @@ function M.swarm_overview(window, pane, deps)
         if not pid then return end
         deps.managed.toggle(deps.opts.managed_file, pid)
         -- Re-open so the toggle's effect is visible and more panes can be managed in place.
-        M.swarm_overview(iw, ip, deps)
+        M.open(iw, ip, deps)
       end),
     }),
     pane

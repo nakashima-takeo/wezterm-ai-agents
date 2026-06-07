@@ -64,11 +64,11 @@ local en = {
   help_prev_tab = "Previous tab",
   help_pin_toggle = "Always on top",
   help_help = "Show help",
-  help_group_swarm = "Swarm",
-  help_swarm_overview = "Swarm (toggle supervision)",
-  swarm_empty = "No agents found.",
-  swarm_supervised = "Supervised",
-  swarm_unsupervised = "Not supervised",
+  help_group_command_center = "Command Center",
+  help_command_center = "Command center (toggle supervision)",
+  cc_empty = "No agents found.",
+  cc_supervised = "Supervised",
+  cc_unsupervised = "Not supervised",
 }
 
 local ja = {
@@ -137,11 +137,11 @@ local ja = {
   help_prev_tab = "前のタブ",
   help_pin_toggle = "常に前面に固定",
   help_help = "ヘルプ",
-  help_group_swarm = "スウォーム",
-  help_swarm_overview = "スウォーム一覧 (監督 on/off)",
-  swarm_empty = "エージェントが見つかりません。",
-  swarm_supervised = "監督中",
-  swarm_unsupervised = "未監督",
+  help_group_command_center = "司令塔",
+  help_command_center = "司令塔 (監督 on/off)",
+  cc_empty = "エージェントが見つかりません。",
+  cc_supervised = "監督中",
+  cc_unsupervised = "未監督",
 }
 
 return { en = en, ja = ja }
