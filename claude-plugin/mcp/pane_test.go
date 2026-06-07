@@ -1,6 +1,45 @@
 package main
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
+
+func TestSendTextSteps(t *testing.T) {
+	// Text only: a single bracketed-paste step, no trailing CR appended to the body.
+	steps := sendTextSteps(2, "hello", false, false)
+	if len(steps) != 1 {
+		t.Fatalf("text only: want 1 step, got %d", len(steps))
+	}
+	if steps[0].stdin != "hello" {
+		t.Errorf("body stdin = %q, want %q (no CR appended to the paste)", steps[0].stdin, "hello")
+	}
+	if strings.Contains(strings.Join(steps[0].args, " "), "--no-paste") {
+		t.Errorf("default body should be a bracketed paste, got --no-paste: %v", steps[0].args)
+	}
+
+	// Text + submit: body paste, then a SEPARATE raw Enter (--no-paste, stdin "\r").
+	steps = sendTextSteps(2, "hello", true, false)
+	if len(steps) != 2 {
+		t.Fatalf("text+submit: want 2 steps, got %d", len(steps))
+	}
+	if steps[0].stdin != "hello" {
+		t.Errorf("body stdin = %q, want %q", steps[0].stdin, "hello")
+	}
+	enter := steps[1]
+	if enter.stdin != "\r" {
+		t.Errorf("submit stdin = %q, want %q", enter.stdin, "\r")
+	}
+	if !strings.Contains(strings.Join(enter.args, " "), "--no-paste") {
+		t.Errorf("submit Enter must be raw (--no-paste), got %v", enter.args)
+	}
+
+	// Submit only (empty text): just the Enter key — useful for confirming a prompt.
+	steps = sendTextSteps(2, "", true, false)
+	if len(steps) != 1 || steps[0].stdin != "\r" {
+		t.Fatalf("submit only: want 1 Enter step, got %+v", steps)
+	}
+}
 
 func TestStripAnsiEscapes(t *testing.T) {
 	tests := []struct {

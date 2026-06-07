@@ -12,6 +12,32 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
+// sendStep is one `wezterm cli` invocation (args after "wezterm") with its stdin payload.
+type sendStep struct {
+	args  []string
+	stdin string
+}
+
+// sendTextSteps builds the command sequence for send_text. The text body is sent first
+// (a bracketed paste unless noPaste); when submit is set, Enter is sent as a SEPARATE raw
+// key afterwards. A CR inside a bracketed paste is inserted as a literal newline by TUIs
+// (e.g. Claude Code) rather than submitting, so the Enter must be sent raw on its own.
+func sendTextSteps(paneID int, text string, submit, noPaste bool) []sendStep {
+	id := strconv.Itoa(paneID)
+	var steps []sendStep
+	if text != "" {
+		args := []string{"cli", "send-text", "--pane-id", id}
+		if noPaste {
+			args = append(args, "--no-paste")
+		}
+		steps = append(steps, sendStep{args: args, stdin: text})
+	}
+	if submit {
+		steps = append(steps, sendStep{args: []string{"cli", "send-text", "--pane-id", id, "--no-paste"}, stdin: "\r"})
+	}
+	return steps
+}
+
 func registerPaneTools(s *server.MCPServer, cfg *Config) {
 	s.AddTool(
 		mcp.NewTool("list_panes",
@@ -129,7 +155,7 @@ func registerPaneTools(s *server.MCPServer, cfg *Config) {
 
 	s.AddTool(
 		mcp.NewTool("send_text",
-			mcp.WithDescription("Send text to a WezTerm pane. Text is piped via stdin to preserve raw bytes. Set submit=true to append CR and auto-submit in Claude Code."),
+			mcp.WithDescription("Send text to a WezTerm pane. Text is sent as a bracketed paste by default (set no_paste=true for raw bytes). Set submit=true to press Enter afterwards as a SEPARATE raw key, which actually submits in TUIs like Claude Code (a CR inside a paste is only inserted as a newline). Use empty text + submit=true to just press Enter (e.g. to confirm a prompt)."),
 			mcp.WithInteger("pane_id",
 				mcp.Required(),
 				mcp.Description("The target pane ID"),
@@ -151,19 +177,12 @@ func registerPaneTools(s *server.MCPServer, cfg *Config) {
 			submit := req.GetBool("submit", false)
 			noPaste := req.GetBool("no_paste", false)
 
-			if submit {
-				text += "\r"
-			}
-
-			args := []string{"cli", "send-text", "--pane-id", strconv.Itoa(paneID)}
-			if noPaste {
-				args = append(args, "--no-paste")
-			}
-
-			cmd := exec.Command("wezterm", args...)
-			cmd.Stdin = bytes.NewReader([]byte(text))
-			if err := cmd.Run(); err != nil {
-				return mcp.NewToolResultError(fmt.Sprintf("send-text failed: %v", err)), nil
+			for _, step := range sendTextSteps(paneID, text, submit, noPaste) {
+				cmd := exec.Command("wezterm", step.args...)
+				cmd.Stdin = bytes.NewReader([]byte(step.stdin))
+				if err := cmd.Run(); err != nil {
+					return mcp.NewToolResultError(fmt.Sprintf("send-text failed: %v", err)), nil
+				}
 			}
 			return mcp.NewToolResultText(fmt.Sprintf("Text sent to pane %d", paneID)), nil
 		},
