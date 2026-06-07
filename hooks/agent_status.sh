@@ -10,7 +10,7 @@
 #
 # Expects WEZTERM_PANE env var (set by WezTerm for all spawned shells).
 # Reads JSON on stdin to extract session_id (compatible with Claude Code,
-# Codex, Gemini, Cursor, Kiro, Devin hooks).
+# Codex, Gemini, Cursor hooks).
 
 [ -z "$WEZTERM_PANE" ] && exit 0
 

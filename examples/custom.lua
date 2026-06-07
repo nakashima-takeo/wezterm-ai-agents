@@ -23,8 +23,8 @@ ai.apply(config, {
   workspace = {
     -- Where workspace definitions are persisted.
     file = wezterm.home_dir .. "/.wezterm-workspaces.json",
-    -- Name for the initial workspace.
-    default_workspace = "default",
+    -- The initial workspace name follows WezTerm's own `config.default_workspace`;
+    -- set that instead of a key here (this block does not control it).
   },
 
   worktree = {
