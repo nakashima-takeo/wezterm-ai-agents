@@ -132,7 +132,7 @@ func managedStates(cfg *Config) map[int]paneSnap {
 type EventChange struct {
 	PaneID    int    `json:"pane_id"`
 	Agent     string `json:"agent,omitempty"`
-	State     string `json:"state"`               // "" when the pane left the managed set / closed
+	State     string `json:"state"`                // "" when the pane left the managed set / closed
 	PrevState string `json:"prev_state,omitempty"` // "" when newly managed
 }
 
