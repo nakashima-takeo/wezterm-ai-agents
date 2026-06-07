@@ -176,14 +176,11 @@ func registerWatchTools(s *server.MCPServer, cfg *Config) {
 	s.AddTool(
 		mcp.NewTool("get_agents",
 			mcp.WithDescription("Snapshot of supervised (managed) agents joined with their live state. "+
-				"Managed panes are toggled by the human in the WezTerm swarm console."),
+				"Managed panes are toggled by the human in the WezTerm command center (司令塔)."),
 		),
 		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			agents := managedSnapshot(cfg)
-			if len(agents) == 0 {
-				return mcp.NewToolResultText("No supervised agents."), nil
-			}
-			return mcp.NewToolResultJSON(agents)
+			// structuredContent must be a JSON object, not a top-level array, so wrap the list.
+			return mcp.NewToolResultJSON(map[string]any{"agents": managedSnapshot(cfg)})
 		},
 	)
 
