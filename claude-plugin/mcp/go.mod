@@ -1,4 +1,4 @@
-module github.com/nakashima-takeo/wezterm-ai-agents/mcp
+module github.com/nakashima-takeo/wezterm-ai-agents/claude-plugin/mcp
 
 go 1.26.1
 

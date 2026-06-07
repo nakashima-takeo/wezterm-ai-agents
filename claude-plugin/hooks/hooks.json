@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"${CLAUDE_PLUGIN_ROOT}/mcp\" && go build -o wezterm-mcp . 2>&1 | tail -3"
+          }
+        ]
+      }
+    ]
+  }
+}

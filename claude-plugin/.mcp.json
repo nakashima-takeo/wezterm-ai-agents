@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "wezterm": {
+      "command": "${CLAUDE_PLUGIN_ROOT}/mcp/wezterm-mcp"
+    }
+  }
+}
