@@ -109,14 +109,20 @@ agent-plugin/
 ```
 各社の supervise 決定起動: claude=`/wezterm-ai-agents:supervise`、codex=`$supervise`、gemini=`/supervise`。Lua の `build_command` (`orchestrator_agent` で選択) が各社流に組み立てる。`disable-model-invocation` は codex が拒否するため SKILL.md には付けず、description と codex の openai.yaml で自発起動を抑止する。
 
+配布は各社で別マニフェスト・別マーケットプレイスを使う (repo root の `.claude-plugin/marketplace.json`＝claude、`.agents/plugins/marketplace.json`＝codex)。
+
 **配布/導入 (利用者):**
-- claude: repo root の `.claude-plugin/marketplace.json` 経由。
+- claude: `.claude-plugin/marketplace.json` 経由。
   ```
   /plugin marketplace add nakashima-takeo/wezterm-ai-agents
   /plugin install wezterm-ai-agents@wezterm-ai-agents
   ```
-- codex: `codex plugin` のマーケットプレイス経由 (`.codex-plugin/plugin.json`)。
-- gemini: `gemini extensions install <repo>` (`gemini-extension.json`)。
+- codex: `.agents/plugins/marketplace.json` 経由 (plugin の `source.path` は repo root からの相対 `./agent-plugin`)。
+  ```
+  codex plugin marketplace add nakashima-takeo/wezterm-ai-agents
+  codex plugin add wezterm-ai-agents@wezterm-ai-agents
+  ```
+- gemini: `gemini extensions install https://github.com/nakashima-takeo/wezterm-ai-agents`。
 
 `.mcp.json`/`gemini-extension.json` の command は共有バイナリ `$XDG_STATE_HOME/wezterm-ai-agents/bin/wezterm-mcp` を指す。これは WezTerm プラグインが起動時に `hooks/install_mcp.sh` で用意する (`v*` Release からプリビルドを DL、無ければ `go build` フォールバック ＝ dev のみ要 Go)。**3 社が同じ1つのバイナリを共有**するため利用環境に Go は不要。ローカル開発は `claude --plugin-dir ./agent-plugin` / `gemini extensions link ./agent-plugin` 等で確認できる。
 
