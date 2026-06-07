@@ -126,7 +126,7 @@ function M.open(window, pane, deps)
 
   window:perform_action(
     act.InputSelector({
-      title = "司令塔",
+      title = L.cc_title,
       choices = choices,
       fuzzy = true,
       action = wezterm.action_callback(function(iw, ip, id)

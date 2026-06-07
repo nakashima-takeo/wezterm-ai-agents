@@ -248,19 +248,20 @@ function M.build_keybinds(deps)
     end),
   }, { group = "help_group_window", desc = "help_pin_toggle", runnable = true })
 
-  -- Command center (toggle which agent panes the orchestrator supervises)
-  add("command_center", {
-    key = "M",
-    mods = "CMD|SHIFT",
-    action = wezterm.action_callback(function(window, pane) sel_cc.open(window, pane, deps) end),
-  }, { group = "help_group_command_center", desc = "help_command_center", runnable = true })
-
   -- Help (keybind cheatsheet, generated from the bindings above)
   add("help", {
     key = "H",
     mods = "CMD|SHIFT",
     action = wezterm.action_callback(function(window, pane) sel_ui.help_selector(window, pane, deps, help_items) end),
   }, { group = "help_group_window", desc = "help_help" })
+
+  -- Command center (toggle which agent panes the orchestrator supervises).
+  -- Placed after the whole window group so the help overlay does not split that group.
+  add("command_center", {
+    key = "M",
+    mods = "CMD|SHIFT",
+    action = wezterm.action_callback(function(window, pane) sel_cc.open(window, pane, deps) end),
+  }, { group = "help_group_command_center", desc = "help_command_center", runnable = true })
 
   -- ヘルプに表示しないキー (パススルー / ナビゲーション / 行編集)
   add("disable_quit", { key = "q", mods = "CMD", action = act.Nop }) -- CMD+Q 誤操作防止
