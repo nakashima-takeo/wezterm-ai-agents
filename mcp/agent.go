@@ -3,10 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"os"
-	"path/filepath"
-	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -26,35 +22,15 @@ func registerAgentTools(s *server.MCPServer, cfg *Config) {
 			mcp.WithDescription("Get the status of all running AI agents across WezTerm panes"),
 		),
 		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			pattern := filepath.Join(cfg.StatusDir, "wezterm-agent-*")
-			files, err := filepath.Glob(pattern)
-			if err != nil {
-				return mcp.NewToolResultError(fmt.Sprintf("failed to glob status files: %v", err)), nil
-			}
-
-			if len(files) == 0 {
+			// Read from the per-GUI-process namespace dir the plugin/hooks write to.
+			states := readAgentStates(nsDir(cfg))
+			if len(states) == 0 {
 				return mcp.NewToolResultText("No active agents found."), nil
 			}
-
-			var agents []AgentStatus
-			for _, f := range files {
-				data, err := os.ReadFile(f)
-				if err != nil {
-					continue
-				}
-				var status AgentStatus
-				if err := json.Unmarshal(data, &status); err != nil {
-					continue
-				}
-				base := filepath.Base(f)
-				status.PaneID = strings.TrimPrefix(base, "wezterm-agent-")
-				agents = append(agents, status)
+			agents := make([]AgentStatus, 0, len(states))
+			for _, st := range states {
+				agents = append(agents, st)
 			}
-
-			if len(agents) == 0 {
-				return mcp.NewToolResultText("No active agents found."), nil
-			}
-
 			result, _ := json.MarshalIndent(agents, "", "  ")
 			return mcp.NewToolResultText(string(result)), nil
 		},

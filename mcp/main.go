@@ -20,6 +20,7 @@ func main() {
 	registerWorktreeTools(s)
 	registerAgentTools(s, cfg)
 	registerPaneTools(s, cfg)
+	registerWatchTools(s, cfg)
 
 	if err := server.ServeStdio(s); err != nil {
 		fmt.Fprintf(os.Stderr, "server error: %v\n", err)

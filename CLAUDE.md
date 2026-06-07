@@ -107,7 +107,9 @@ claude mcp add -s user wezterm ./mcp/wezterm-mcp
 claude mcp add -s user -e WEZTERM_MCP_AGENT_CLAUDE="claude --dangerously-skip-permissions" -- wezterm ./mcp/wezterm-mcp
 ```
 
-**ツール:** list_workspaces, list_panes, get_agent_status, list_worktrees, add_worktree, remove_worktree, spawn_agent, get_pane_text, send_text
+**ツール:** list_workspaces, list_panes, get_agent_status, get_agents, wait_for_event, list_worktrees, add_worktree, remove_worktree, spawn_agent, get_pane_text, send_text
+
+`get_agents` は監督集合 (swarm コンソールで人間がトグル) とライブ状態を結合して返す。`wait_for_event` は監督ペインの状態変化／監督集合の変化までブロックし差分を返す (オーケストレーターの監視ループ用)。状態ファイルは `WEZTERM_UNIX_SOCKET` 由来の gui_pid 名前空間配下を読む (フック・Lua と同一規則)。
 
 ## エージェントの追加方法
 

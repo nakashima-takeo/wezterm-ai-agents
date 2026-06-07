@@ -13,10 +13,20 @@ type Config struct {
 	HooksDir       string
 }
 
+// defaultStatusDir matches the plugin (init.lua) and hooks/agent_status.sh: the XDG state
+// base, so the MCP server reads the same files the plugin writes without any env override.
+func defaultStatusDir() string {
+	base := os.Getenv("XDG_STATE_HOME")
+	if base == "" {
+		base = filepath.Join(os.Getenv("HOME"), ".local", "state")
+	}
+	return filepath.Join(base, "wezterm-ai-agents")
+}
+
 func loadConfig() *Config {
 	cfg := &Config{
 		WorkspacesFile: filepath.Join(os.Getenv("HOME"), ".wezterm-workspaces.json"),
-		StatusDir:      os.TempDir(),
+		StatusDir:      defaultStatusDir(),
 		Agents: map[string]string{
 			"claude":  "claude",
 			"codex":   "codex",
