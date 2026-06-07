@@ -170,7 +170,10 @@ local default_opts = {
   status_dir = default_status_dir(),
   -- 司令塔 (CMD+SHIFT+M) で監督対象が空→非空になった時、supervise オーケストレーターを最左タブで自動起動する。
   auto_orchestrator = true,
-  orchestrator_command = 'claude --dangerously-skip-permissions "/wezterm-ai-agents:supervise"',
+  -- オーケストレーターを起動する claude 本体＋フラグ (スラッシュコマンドはプラグインが付けるので不要)。
+  orchestrator_command = "claude --dangerously-skip-permissions",
+  -- 任意。監督エージェントに固定で渡すシステムプロンプト (--append-system-prompt として付与)。複数行可。
+  orchestrator_system_prompt = nil,
   enabled_agents = nil, -- nil = PATH 上にバイナリが在るエージェントを自動検出して登録; or { "claude" } で明示固定
   default_agent = nil, -- nil = first registered; or "claude" to set default agent for Cmd+Shift+C
   default_editor = nil, -- nil = auto-detect (code/cursor/windsurf/zed/subl); or "/usr/local/bin/cursor" etc.

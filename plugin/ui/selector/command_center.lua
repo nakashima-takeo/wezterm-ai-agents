@@ -59,6 +59,17 @@ local function row_choice(r)
   return { id = "pane:" .. r.pane_id, label = wezterm.format(fmt) }
 end
 
+-- supervise スキルの起動指定。スラッシュコマンドはプラグインの内部詳細で、利用者は意識しなくてよい。
+local SUPERVISE_SLASH = '"/wezterm-ai-agents:supervise"'
+
+-- 起動シェルコマンドを組み立てる。base (claude＋フラグ) に、任意のシステムプロンプトを
+-- --append-system-prompt として (shell_quote で安全に) 足し、最後に supervise スキルを起動する。
+function M.build_command(base, system_prompt, shell_quote)
+  local cmd = base
+  if system_prompt and system_prompt ~= "" then cmd = cmd .. " --append-system-prompt " .. shell_quote(system_prompt) end
+  return cmd .. " " .. SUPERVISE_SLASH
+end
+
 -- 記録済みオーケストレーターのペインが今も生きているか。
 local function orchestrator_alive(deps)
   local oid = deps.managed.read_orchestrator(deps.opts.orchestrator_file)
@@ -71,9 +82,10 @@ local function launch_orchestrator(window, pane, deps)
   local opts = deps.opts
   local shell = os.getenv("SHELL") or "/bin/sh"
   local cwd = deps.workspace and deps.workspace.get_cwd_path(pane) or nil
+  local cmd = M.build_command(opts.orchestrator_command, opts.orchestrator_system_prompt, deps.agent.shell_quote)
   local ok, new_pane = pcall(function()
     local _, p = window:mux_window():spawn_tab({
-      args = { shell, "-lc", opts.orchestrator_command },
+      args = { shell, "-lc", cmd },
       cwd = cwd,
       set_environment_variables = { WEZTERM_AGENT_STATUS_DIR = opts.status_dir },
     })

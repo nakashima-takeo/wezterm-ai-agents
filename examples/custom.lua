@@ -65,6 +65,17 @@ ai.apply(config, {
   -- How often (seconds) workspace state (tabs, agents, layouts) is synced to JSON.
   session_sync_interval = 10,
 
+  -- Supervisor orchestrator: auto-launched when you put an agent under supervision
+  -- in the command center (CMD+SHIFT+M). It watches managed agents and only asks you
+  -- for uncertain/irreversible decisions. Set auto_orchestrator = false to disable.
+  -- A fixed system prompt for the supervisor (optional, multi-line OK):
+  orchestrator_system_prompt = [[
+You are a cautious supervisor.
+- Always confirm with the human before irreversible/outward-facing actions (push, merge to main, deletes).
+]],
+  -- The claude binary + flags used to launch it (the slash command is added by the plugin):
+  -- orchestrator_command = "claude --dangerously-skip-permissions",
+
   -- Auto-install agent state-tracking hooks into each agent's config on startup
   -- (default: true; requires `jq`). Symlinked configs (e.g. dotfiles) are skipped.
   -- Set false to manage hooks yourself (see README "手動でのHooks設定").
