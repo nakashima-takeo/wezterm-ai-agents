@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -17,6 +18,12 @@ import (
 // `sh -c` command below. session_id originates from agent-written state files, so it is
 // externally-influenced input that must not reach the shell unchecked.
 var sessionIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
+
+// submitDelay gives a TUI time to finish processing a bracketed paste before the raw Enter
+// that follows. Without it, fast back-to-back sends drop the Enter in some TUIs (e.g. Gemini
+// CLI submitted only on a second Enter; Claude Code and Codex tolerate no delay). Verified
+// 0.3s is enough; kept here as a small fixed pause applied between send steps.
+const submitDelay = 300 * time.Millisecond
 
 // sendStep is one `wezterm cli` invocation (args after "wezterm") with its stdin payload.
 type sendStep struct {
@@ -232,7 +239,10 @@ func registerPaneTools(s *server.MCPServer, cfg *Config) {
 			submit := req.GetBool("submit", false)
 			noPaste := req.GetBool("no_paste", false)
 
-			for _, step := range sendTextSteps(paneID, text, submit, noPaste) {
+			for i, step := range sendTextSteps(paneID, text, submit, noPaste) {
+				if i > 0 {
+					time.Sleep(submitDelay) // let the TUI commit the paste before the raw Enter
+				}
 				cmd := exec.Command("wezterm", step.args...)
 				cmd.Stdin = bytes.NewReader([]byte(step.stdin))
 				if err := cmd.Run(); err != nil {
