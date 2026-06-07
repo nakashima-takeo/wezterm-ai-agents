@@ -33,7 +33,9 @@ func TestReadManagedSet(t *testing.T) {
 		t.Errorf("missing file should be empty, got %v", got)
 	}
 
-	os.WriteFile(filepath.Join(dir, "managed.json"), []byte(`{"managed":[3,6,9]}`), 0o644)
+	if err := os.WriteFile(filepath.Join(dir, "managed.json"), []byte(`{"managed":[3,6,9]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	got := readManagedSet(dir)
 	for _, id := range []int{3, 6, 9} {
 		if !got[id] {
@@ -47,9 +49,13 @@ func TestReadManagedSet(t *testing.T) {
 
 func TestReadAgentStates(t *testing.T) {
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "wezterm-agent-3"),
-		[]byte(`{"agent":"claude","state":"waiting","ts":100,"session_id":"s1"}`), 0o644)
-	os.WriteFile(filepath.Join(dir, "wezterm-agent-3.tmp"), []byte(`partial`), 0o644) // must be ignored
+	if err := os.WriteFile(filepath.Join(dir, "wezterm-agent-3"),
+		[]byte(`{"agent":"claude","state":"waiting","ts":100,"session_id":"s1"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "wezterm-agent-3.tmp"), []byte(`partial`), 0o644); err != nil { // must be ignored
+		t.Fatal(err)
+	}
 
 	states := readAgentStates(dir)
 	if len(states) != 1 {
