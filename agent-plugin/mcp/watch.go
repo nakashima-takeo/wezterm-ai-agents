@@ -175,6 +175,9 @@ func registerWatchTools(s *server.MCPServer, cfg *Config) {
 
 	s.AddTool(
 		mcp.NewTool("get_agents",
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithOpenWorldHintAnnotation(false),
 			mcp.WithDescription("Snapshot of supervised (managed) agents joined with their live state. "+
 				"Managed panes are toggled by the human in the WezTerm command center (司令塔)."),
 		),
@@ -186,6 +189,9 @@ func registerWatchTools(s *server.MCPServer, cfg *Config) {
 
 	s.AddTool(
 		mcp.NewTool("wait_for_event",
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithOpenWorldHintAnnotation(false),
 			mcp.WithDescription("Block until a supervised agent changes state (or the managed set changes), "+
 				"then return the deltas. Returns immediately if changes already happened since the last call, "+
 				"so nothing is missed while the orchestrator reasons. Returns timed_out=true with no changes "+

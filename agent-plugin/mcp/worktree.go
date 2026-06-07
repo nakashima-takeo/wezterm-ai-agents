@@ -60,6 +60,9 @@ func gitRoot(cwd string) (string, error) {
 func registerWorktreeTools(s *server.MCPServer) {
 	s.AddTool(
 		mcp.NewTool("list_worktrees",
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithOpenWorldHintAnnotation(false),
 			mcp.WithDescription("List git worktrees for a repository"),
 			mcp.WithString("cwd",
 				mcp.Required(),
@@ -88,6 +91,9 @@ func registerWorktreeTools(s *server.MCPServer) {
 
 	s.AddTool(
 		mcp.NewTool("add_worktree",
+			mcp.WithReadOnlyHintAnnotation(false),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithOpenWorldHintAnnotation(false),
 			mcp.WithDescription("Create a new git worktree. If path is omitted, creates a sibling directory named after the branch."),
 			mcp.WithString("cwd",
 				mcp.Required(),
@@ -154,6 +160,9 @@ func registerWorktreeTools(s *server.MCPServer) {
 
 	s.AddTool(
 		mcp.NewTool("remove_worktree",
+			mcp.WithReadOnlyHintAnnotation(false),
+			mcp.WithDestructiveHintAnnotation(true),
+			mcp.WithOpenWorldHintAnnotation(false),
 			mcp.WithDescription("Remove a git worktree"),
 			mcp.WithString("path",
 				mcp.Required(),

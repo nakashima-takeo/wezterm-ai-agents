@@ -106,6 +106,9 @@ func registerPaneTools(s *server.MCPServer, cfg *Config) {
 
 	s.AddTool(
 		mcp.NewTool("list_panes",
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithOpenWorldHintAnnotation(false),
 			mcp.WithDescription("List all WezTerm windows, tabs, and panes with their workspace, title, cwd, and active state"),
 		),
 		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -120,6 +123,9 @@ func registerPaneTools(s *server.MCPServer, cfg *Config) {
 
 	s.AddTool(
 		mcp.NewTool("spawn_agent",
+			mcp.WithReadOnlyHintAnnotation(false),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithOpenWorldHintAnnotation(false),
 			mcp.WithDescription("Spawn an AI agent in a new WezTerm tab. Returns the new pane ID."),
 			mcp.WithString("agent",
 				mcp.Required(),
@@ -188,6 +194,9 @@ func registerPaneTools(s *server.MCPServer, cfg *Config) {
 
 	s.AddTool(
 		mcp.NewTool("get_pane_text",
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithOpenWorldHintAnnotation(false),
 			mcp.WithDescription("Get the text content of a WezTerm pane. Uses --escapes to capture text from alternate screen buffers (e.g. Claude Code TUI)."),
 			mcp.WithInteger("pane_id",
 				mcp.Required(),
@@ -226,6 +235,9 @@ func registerPaneTools(s *server.MCPServer, cfg *Config) {
 
 	s.AddTool(
 		mcp.NewTool("send_text",
+			mcp.WithReadOnlyHintAnnotation(false),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithOpenWorldHintAnnotation(false),
 			mcp.WithDescription("Send text to a WezTerm pane. Text is sent as a bracketed paste by default (set no_paste=true for raw bytes). Set submit=true to press Enter afterwards as a SEPARATE raw key, which actually submits in TUIs like Claude Code (a CR inside a paste is only inserted as a newline). Use empty text + submit=true to just press Enter (e.g. to confirm a prompt)."),
 			mcp.WithInteger("pane_id",
 				mcp.Required(),
@@ -264,6 +276,9 @@ func registerPaneTools(s *server.MCPServer, cfg *Config) {
 
 	s.AddTool(
 		mcp.NewTool("send_key",
+			mcp.WithReadOnlyHintAnnotation(false),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithOpenWorldHintAnnotation(false),
 			mcp.WithDescription("Send a named key or control chord to a WezTerm pane as a raw keypress (not pasted text). Use this for what send_text cannot do: interrupt a runaway agent (ctrl-c), dismiss/cancel a prompt (escape), navigate TUI menus (up/down then enter), etc."),
 			mcp.WithInteger("pane_id",
 				mcp.Required(),

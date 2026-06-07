@@ -48,6 +48,9 @@ func readWorkspaces(path string) (*WorkspaceData, error) {
 func registerWorkspaceTools(s *server.MCPServer, cfg *Config) {
 	s.AddTool(
 		mcp.NewTool("list_workspaces",
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithOpenWorldHintAnnotation(false),
 			mcp.WithDescription("List all registered WezTerm workspaces with their tabs, agents, and last-used timestamps"),
 		),
 		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

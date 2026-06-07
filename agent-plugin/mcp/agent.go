@@ -19,6 +19,9 @@ type AgentStatus struct {
 func registerAgentTools(s *server.MCPServer, cfg *Config) {
 	s.AddTool(
 		mcp.NewTool("get_agent_status",
+			mcp.WithReadOnlyHintAnnotation(true),
+			mcp.WithDestructiveHintAnnotation(false),
+			mcp.WithOpenWorldHintAnnotation(false),
 			mcp.WithDescription("Get the status of all running AI agents across WezTerm panes"),
 		),
 		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
