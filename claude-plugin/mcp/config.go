@@ -10,7 +10,6 @@ type Config struct {
 	WorkspacesFile string
 	StatusDir      string
 	Agents         map[string]string
-	HooksDir       string
 }
 
 // defaultStatusDir matches the plugin (init.lua) and hooks/agent_status.sh: the XDG state
@@ -25,13 +24,13 @@ func defaultStatusDir() string {
 
 func loadConfig() *Config {
 	cfg := &Config{
-		WorkspacesFile: filepath.Join(os.Getenv("HOME"), ".wezterm-workspaces.json"),
+		WorkspacesFile: filepath.Join(defaultStatusDir(), "workspaces.json"),
 		StatusDir:      defaultStatusDir(),
 		Agents: map[string]string{
-			"claude":  "claude",
-			"codex":   "codex",
-			"gemini":  "gemini",
-			"cursor":  "cursor-agent",
+			"claude": "claude",
+			"codex":  "codex",
+			"gemini": "gemini",
+			"cursor": "cursor-agent",
 		},
 	}
 
