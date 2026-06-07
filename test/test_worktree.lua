@@ -105,6 +105,35 @@ test("addはoptsなしでもsiblingにフォールバックする", function()
   H.assert_eq(wt_path, "/home/user/repo__worktrees/main")
 end)
 
+test("addは先頭ハイフンのブランチ名を拒否しgitを呼ばない", function()
+  local worktree = H.load_worktree()
+  local called = false
+  local original = wezterm.run_child_process
+  wezterm.run_child_process = function()
+    called = true
+    return true, "", ""
+  end
+
+  local ok, wt_path, err = worktree.add("/home/user/repo", "-x", nil, true, {})
+
+  wezterm.run_child_process = original
+  H.assert_false(ok, "先頭ハイフンのブランチ名は拒否される")
+  H.assert_nil(wt_path, "拒否時はパスを返さない")
+  H.assert_match(err, "leading hyphen", "拒否理由を返す")
+  H.assert_false(called, "拒否時は git を呼ばない")
+end)
+
+test("addはlocal_nameの先頭ハイフンも拒否する", function()
+  local worktree = H.load_worktree()
+  local original = wezterm.run_child_process
+  wezterm.run_child_process = function() return true, "", "" end
+
+  local ok = worktree.add("/home/user/repo", "feature", "-evil", false, {})
+
+  wezterm.run_child_process = original
+  H.assert_false(ok, "local_name の先頭ハイフンも拒否される")
+end)
+
 H.section("ワークスペース名の導出")
 
 test("正常系：非mainブランチは「ベース名/ブランチ名」形式になる", function()

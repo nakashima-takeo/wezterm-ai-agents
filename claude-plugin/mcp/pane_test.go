@@ -41,6 +41,23 @@ func TestSendTextSteps(t *testing.T) {
 	}
 }
 
+func TestSessionIDPattern(t *testing.T) {
+	// session_id is interpolated into the `sh -c` command, so the pattern must reject
+	// anything that could break out of the resume argument.
+	valid := []string{"abc123", "a_b-c", "DEADBEEF", "01HXYZ-session_1"}
+	for _, s := range valid {
+		if !sessionIDPattern.MatchString(s) {
+			t.Errorf("session_id %q should be accepted", s)
+		}
+	}
+	invalid := []string{"", "a;rm -rf", "$(whoami)", "a b", "a/b", "a`b`", "a&&b", "a|b", "a'b"}
+	for _, s := range invalid {
+		if sessionIDPattern.MatchString(s) {
+			t.Errorf("session_id %q should be rejected", s)
+		}
+	}
+}
+
 func TestKeyPayload(t *testing.T) {
 	if p, ok := keyPayload("ctrl-c", 1); !ok || p != "\x03" {
 		t.Errorf("ctrl-c = %q ok=%v, want \\x03", p, ok)
