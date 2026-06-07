@@ -4,7 +4,7 @@
 --
 -- On-disk schema (per GUI pid namespace, alongside the per-pane state files):
 --   { "managed": [3, 6, 9] }
--- This shape is also read independently by the Go MCP server (claude-plugin/mcp/watch.go
+-- This shape is also read independently by the Go MCP server (agent-plugin/mcp/watch.go
 -- readManagedSet). Update both sides when changing it.
 --
 -- pane ids are mux-global within one GUI process, so the file lives under the same

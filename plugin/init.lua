@@ -344,7 +344,7 @@ function M.apply(config, user_opts)
             M.hooks_dir .. "/install_mcp.sh",
             opts.mcp_repo,
             opts.mcp_version or ("v" .. M.version),
-            plugin_dir .. "/claude-plugin/mcp",
+            plugin_dir .. "/agent-plugin/mcp",
           })
         end
       )

@@ -7,7 +7,7 @@
       "source": {
         "source": "git-subdir",
         "url": "https://github.com/nakashima-takeo/wezterm-ai-agents.git",
-        "path": "claude-plugin"
+        "path": "agent-plugin"
       },
       "description": "WezTerm のワークスペース/worktree/並列エージェント操作と監督オーケストレーターを提供する MCP プラグイン"
     }

@@ -6,5 +6,5 @@
 CLAUDE.local.md
 
 # MCP server binary (wezterm-mcp = release name, mcp = `go build` default from module dir)
-claude-plugin/mcp/wezterm-mcp
-claude-plugin/mcp/mcp
+agent-plugin/mcp/wezterm-mcp
+agent-plugin/mcp/mcp

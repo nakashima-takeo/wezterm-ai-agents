@@ -13,7 +13,7 @@
 #   install_mcp.sh <repo_url> <version> <source_dir>
 #     repo_url   : e.g. https://github.com/nakashima-takeo/wezterm-ai-agents
 #     version    : release tag (e.g. v0.12.0) or "latest"
-#     source_dir : path to the Go source (claude-plugin/mcp) for the dev fallback build
+#     source_dir : path to the Go source (agent-plugin/mcp) for the dev fallback build
 #
 # Resolution order: (1) already cached, (2) download the matching prebuilt from the
 # Release, (3) dev fallback: build from source with Go. Prints the binary path on success.

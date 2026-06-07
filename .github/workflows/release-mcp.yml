@@ -23,9 +23,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version-file: claude-plugin/mcp/go.mod
+          go-version-file: agent-plugin/mcp/go.mod
       - name: Build wezterm-mcp-${{ matrix.goos }}-${{ matrix.goarch }}
-        working-directory: claude-plugin/mcp
+        working-directory: agent-plugin/mcp
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
@@ -34,7 +34,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: wezterm-mcp-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: claude-plugin/mcp/wezterm-mcp-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: agent-plugin/mcp/wezterm-mcp-${{ matrix.goos }}-${{ matrix.goarch }}
           if-no-files-found: error
 
   release:
