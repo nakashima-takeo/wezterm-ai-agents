@@ -9,21 +9,50 @@ H.section("command center: build_command")
 -- 構造だけ検証する簡易クォータ (本物の shell_quote は agent 側でテスト済み)。
 local q = function(s) return "{" .. s .. "}" end
 
-H.test("base + slash command when no system prompt", function()
-  local cmd = cc.build_command("claude --x", nil, q)
+-- claude: 専用フラグ＋位置引数 slash
+H.test("claude: base + slash command when no system prompt", function()
+  local cmd = cc.build_command("claude", "claude --x", nil, q)
   H.assert_eq(cmd, 'claude --x "/wezterm-ai-agents:supervise"', "prefix then slash")
 end)
 
-H.test("empty system prompt is ignored", function()
-  local cmd = cc.build_command("claude", "", q)
+H.test("claude: empty system prompt is ignored", function()
+  local cmd = cc.build_command("claude", "claude", "", q)
   H.assert_false(cmd:find("append%-system%-prompt"), "no append flag for empty prompt")
   H.assert_match(cmd, "supervise", "slash command still present")
 end)
 
-H.test("system prompt injects quoted --append-system-prompt before the slash command", function()
-  local cmd = cc.build_command("claude", "be careful", q)
+H.test("claude: system prompt injects quoted --append-system-prompt before the slash command", function()
+  local cmd = cc.build_command("claude", "claude", "be careful", q)
   H.assert_match(cmd, "%-%-append%-system%-prompt {be careful}", "quoted append flag")
   H.assert_match(cmd, '{be careful} "/wezterm%-ai%-agents:supervise"$', "slash command stays last")
+end)
+
+-- codex: $supervise をプロンプトに (明示必須)、sp は前置
+H.test("codex: $supervise as quoted prompt when no system prompt", function()
+  local cmd = cc.build_command("codex", "codex --yolo", nil, q)
+  H.assert_eq(cmd, "codex --yolo {$supervise}", "base then quoted $supervise")
+end)
+
+H.test("codex: system prompt is folded before $supervise in one quoted arg", function()
+  local cmd = cc.build_command("codex", "codex", "be careful", q)
+  H.assert_match(cmd, "{be careful\n\n%$supervise}$", "sp then blank line then $supervise, quoted as one arg")
+end)
+
+-- gemini: -i で起動。sp 無しは /supervise、sp 有りは平文トリガ
+H.test("gemini: -i with /supervise slash when no system prompt", function()
+  local cmd = cc.build_command("gemini", "gemini --yolo", nil, q)
+  H.assert_eq(cmd, "gemini --yolo -i {/supervise}", "base -i then quoted slash")
+end)
+
+H.test("gemini: system prompt switches to plain trigger (slash would not fire)", function()
+  local cmd = cc.build_command("gemini", "gemini", "be careful", q)
+  H.assert_false(cmd:find("/supervise"), "no slash command when sp present")
+  H.assert_match(cmd, "{be careful\n\nsupervise スキルに従って", "sp then plain trigger")
+end)
+
+H.test("unknown orchestrator agent errors", function()
+  local ok = pcall(cc.build_command, "cursor", "cursor-agent", nil, q)
+  H.assert_false(ok, "unknown agent raises")
 end)
 
 H.section("command center: collect_rows 自己ペイン除外")

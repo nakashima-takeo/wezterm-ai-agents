@@ -170,7 +170,10 @@ local default_opts = {
   status_dir = default_status_dir(),
   -- 司令塔 (CMD+SHIFT+M) で監督対象が空→非空になった時、supervise オーケストレーターを最左タブで自動起動する。
   auto_orchestrator = true,
-  -- オーケストレーターを起動する claude 本体＋フラグ (スラッシュコマンドはプラグインが付けるので不要)。
+  -- オーケストレーターに使うエージェント。supervise の決定的起動の渡し方が各社で異なるため分岐に使う。
+  orchestrator_agent = "claude", -- "claude" | "codex" | "gemini"
+  -- オーケストレーターを起動する本体＋フラグ (supervise 起動トークンはプラグインが付けるので不要)。
+  -- orchestrator_agent を変えたらこちらも対応する本体に変える (例: codex なら "codex --yolo")。
   orchestrator_command = "claude --dangerously-skip-permissions",
   -- orchestrator_system_prompt は既定なし (未設定)。監督エージェントに固定システムプロンプトを
   -- 渡したい時だけ opts に文字列を設定する (--append-system-prompt として付与。examples/custom.lua 参照)。

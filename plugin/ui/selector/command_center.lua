@@ -60,15 +60,39 @@ local function row_choice(r)
   return { id = "pane:" .. r.pane_id, label = wezterm.format(fmt) }
 end
 
--- supervise スキルの起動指定。スラッシュコマンドはプラグインの内部詳細で、利用者は意識しなくてよい。
-local SUPERVISE_SLASH = '"/wezterm-ai-agents:supervise"'
+-- 各社の supervise 決定的起動トークン。スラッシュ等はプラグインの内部詳細で利用者は意識しなくてよい。
+--   claude: 位置引数の slash コマンド (シェルで1引数になるよう二重引用済み)
+--   codex : skill 参照 $supervise (openai.yaml の allow_implicit_invocation:false により明示必須)
+--   gemini: slash コマンド (commands/supervise.toml)
+local SUPERVISE = {
+  claude = '"/wezterm-ai-agents:supervise"',
+  codex = "$supervise",
+  gemini = "/supervise",
+}
+-- gemini は system prompt と併用すると slash が先頭でなくなり効かないため、その時だけ平文トリガに切替える
+-- (skill は extension から自動ロード済みなのでスキル名指定で起動できる)。
+local GEMINI_PLAIN_TRIGGER =
+  "supervise スキルに従って WezTerm 監督オーケストレーターとして動作せよ。まず get_agents で監督対象を把握し監視ループを開始せよ。"
 
--- 起動シェルコマンドを組み立てる。base (claude＋フラグ) に、任意のシステムプロンプトを
--- --append-system-prompt として (shell_quote で安全に) 足し、最後に supervise スキルを起動する。
-function M.build_command(base, system_prompt, shell_quote)
-  local cmd = base
-  if system_prompt and system_prompt ~= "" then cmd = cmd .. " --append-system-prompt " .. shell_quote(system_prompt) end
-  return cmd .. " " .. SUPERVISE_SLASH
+-- 起動シェルコマンドを組み立てる。base (エージェント本体＋フラグ) に、選んだエージェント流の
+-- システムプロンプト付与と supervise 起動トークンを足す。各社で渡し方が異なるため分岐する。
+function M.build_command(agent_id, base, system_prompt, shell_quote)
+  local sp = (system_prompt and system_prompt ~= "") and system_prompt or nil
+  if agent_id == "claude" then
+    -- 真の system prompt は専用フラグ。トリガは位置引数の slash。
+    local cmd = base
+    if sp then cmd = cmd .. " --append-system-prompt " .. shell_quote(sp) end
+    return cmd .. " " .. SUPERVISE.claude
+  elseif agent_id == "codex" then
+    -- inline な system-prompt フラグが無いのでプロンプトに前置。skill は $supervise でのみ読み込まれる。
+    local prompt = sp and (sp .. "\n\n" .. SUPERVISE.codex) or SUPERVISE.codex
+    return base .. " " .. shell_quote(prompt)
+  elseif agent_id == "gemini" then
+    -- -i で初期プロンプトを実行し対話継続。sp 併用時のみ平文トリガに切替 (上記の理由)。
+    local prompt = sp and (sp .. "\n\n" .. GEMINI_PLAIN_TRIGGER) or SUPERVISE.gemini
+    return base .. " -i " .. shell_quote(prompt)
+  end
+  error("unknown orchestrator_agent: " .. tostring(agent_id))
 end
 
 -- 記録済みオーケストレーターのペインが今も生きているか。
@@ -83,7 +107,7 @@ local function launch_orchestrator(window, pane, deps)
   local opts = deps.opts
   local shell = os.getenv("SHELL") or "/bin/sh"
   local cwd = deps.workspace and deps.workspace.get_cwd_path(pane) or nil
-  local cmd = M.build_command(opts.orchestrator_command, opts.orchestrator_system_prompt, deps.agent.shell_quote)
+  local cmd = M.build_command(opts.orchestrator_agent, opts.orchestrator_command, opts.orchestrator_system_prompt, deps.agent.shell_quote)
   local ok, new_pane = pcall(function()
     local _, p = window:mux_window():spawn_tab({
       args = { shell, "-lc", cmd },

@@ -73,7 +73,10 @@ ai.apply(config, {
 You are a cautious supervisor.
 - Always confirm with the human before irreversible/outward-facing actions (push, merge to main, deletes).
 ]],
-  -- The claude binary + flags used to launch it (the slash command is added by the plugin):
+  -- Which agent runs the orchestrator (claude | codex | gemini). The supervise launch token
+  -- differs per agent and is added by the plugin; just match orchestrator_command to it.
+  -- orchestrator_agent = "claude",
+  -- The binary + flags used to launch it (e.g. "codex --yolo" / "gemini --approval-mode=yolo"):
   -- orchestrator_command = "claude --dangerously-skip-permissions",
 
   -- Auto-install agent state-tracking hooks into each agent's config on startup
