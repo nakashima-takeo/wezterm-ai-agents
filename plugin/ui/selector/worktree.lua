@@ -250,12 +250,15 @@ function M.worktree_selector(window, pane, deps)
     if wt.branch and (cwd_path == wt.path or (cwd_path and cwd_path:find(wt.path .. "/", 1, true))) then current_branch = wt.branch end
   end
 
-  table.insert(choices, { id = "tmp_create", label = L.tmp_branch_create })
-  if has_tmp then table.insert(choices, { id = "cleanup_tmp", label = L.cleanup_tmp }) end
-  if has_detached then table.insert(choices, { id = "prune_detached", label = L.prune_detached }) end
-  table.insert(choices, { id = "fetch_remote", label = L.fetch_remote })
-
-  table.insert(choices, { id = "_sep_wt", label = "── Worktree ──" })
+  table.insert(choices, {
+    id = "_sep_wt",
+    label = wezterm.format({
+      { Foreground = { AnsiColor = "Aqua" } },
+      { Attribute = { Intensity = "Bold" } },
+      { Text = "\xE2\x96\x8C " .. L.wt_title },
+      "ResetAttributes",
+    }),
+  })
   for _, wt in ipairs(worktrees) do
     if wt.branch then
       local is_main = (wt.path == git_root)
@@ -281,13 +284,13 @@ function M.worktree_selector(window, pane, deps)
 
   local branch_info = deps.worktree.branches(git_root, worktrees)
   if #branch_info.local_branches > 0 then
-    table.insert(choices, { id = "_sep_local", label = "── Local Branch ──" })
+    table.insert(choices, { id = "_sep_local", label = "── " .. L.wt_sec_local .. " ──" })
     for _, b in ipairs(branch_info.local_branches) do
       table.insert(choices, { id = "auto_create:" .. b .. ":" .. b, label = branch_label(b, b) })
     end
   end
   if #branch_info.remote_branches > 0 then
-    table.insert(choices, { id = "_sep_remote", label = "── Remote Branch ──" })
+    table.insert(choices, { id = "_sep_remote", label = "── " .. L.wt_sec_remote .. " ──" })
     for _, b in ipairs(branch_info.remote_branches) do
       table.insert(choices, { id = "auto_create:" .. b.display .. ":" .. b.local_name, label = branch_label(b.display, b.local_name) })
     end
@@ -309,7 +312,7 @@ function M.worktree_selector(window, pane, deps)
     me
   )
   if #pr_list > 0 then
-    table.insert(choices, { id = "_sep_pr", label = "── Pull Requests ──" })
+    table.insert(choices, { id = "_sep_pr", label = "── " .. L.wt_sec_pr .. " ──" })
     for _, pr in ipairs(pr_list) do
       local text = pr.headRefName
       if pr.owner then text = text .. " (@" .. pr.owner .. ")" end
@@ -336,7 +339,7 @@ function M.worktree_selector(window, pane, deps)
   -- リンク済みブランチがローカルに到達可能な Issue は除外し、自分アサインを先頭に寄せる。
   local issues = deps.worktree.relevant_issues(deps.worktree.uncovered_issues(deps.worktree.issue_list(git_root), reachable), me)
   if #issues > 0 then
-    table.insert(choices, { id = "_sep_issue", label = "── Issues ──" })
+    table.insert(choices, { id = "_sep_issue", label = "── " .. L.wt_sec_issue .. " ──" })
     for _, issue in ipairs(issues) do
       -- 自分アサインは黄色で色付け。非アサインは通常色のまま (先頭ソートと併せて十分見分けられる)。
       local fmt = {}
@@ -346,6 +349,13 @@ function M.worktree_selector(window, pane, deps)
       table.insert(choices, { id = "issue:" .. tostring(issue.number), label = wezterm.format(fmt) })
     end
   end
+
+  -- 管理・操作系は主目的(再開/始める)の下にまとめる。
+  table.insert(choices, { id = "_sep_actions", label = "── " .. L.wt_sec_actions .. " ──" })
+  table.insert(choices, { id = "tmp_create", label = L.tmp_branch_create })
+  if has_tmp then table.insert(choices, { id = "cleanup_tmp", label = L.cleanup_tmp }) end
+  if has_detached then table.insert(choices, { id = "prune_detached", label = L.prune_detached }) end
+  table.insert(choices, { id = "fetch_remote", label = L.fetch_remote })
 
   window:perform_action(
     act.InputSelector({
