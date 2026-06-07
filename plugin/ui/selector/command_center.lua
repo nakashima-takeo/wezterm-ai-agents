@@ -17,7 +17,8 @@ local ui
 function M.setup(ui_mod) ui = ui_mod end
 
 -- Every alive pane that is either a detected agent or already in the managed set.
-local function collect_rows(deps)
+-- The orchestrator's own pane is always excluded (self-supervision guard).
+function M.collect_rows(deps)
   local opts = deps.opts
   local set = deps.managed.read(opts.managed_file)
   local orchestrator = deps.managed.read_orchestrator(opts.orchestrator_file)
@@ -102,7 +103,7 @@ end
 
 function M.open(window, pane, deps)
   local L = deps.opts.labels
-  local rows = collect_rows(deps)
+  local rows = M.collect_rows(deps)
   if #rows == 0 then
     ui.toast(window, L.cc_empty)
     return
