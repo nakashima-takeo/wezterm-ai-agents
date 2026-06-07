@@ -38,6 +38,10 @@ local function own_pid()
 end
 local function ns_dir(base) return base .. "/" .. own_pid() end
 
+-- Namespaced (per GUI pid) dir under base. Exposed so sibling state (e.g. managed.json)
+-- can live alongside the per-pane state files and be reaped by cleanup_dead_namespaces.
+function M.ns_dir(base) return ns_dir(base) end
+
 function M.read_state_file(pane_id, status_dir)
   local path = status_dir .. "/wezterm-agent-" .. pane_id
   local f = io.open(path, "r")

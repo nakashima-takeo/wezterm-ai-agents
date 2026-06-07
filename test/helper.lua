@@ -47,7 +47,12 @@ end
 -- 本体 init.lua と同じく setup() でサブモジュールを結線して単一ファサードにする。
 function H.load_selector()
   local selector = H.load_mod("ui/selector/init")
-  selector.setup(H.load_mod("ui/selector/workspace"), H.load_mod("ui/selector/worktree"), H.load_mod("ui/selector/ui"))
+  selector.setup(
+    H.load_mod("ui/selector/workspace"),
+    H.load_mod("ui/selector/worktree"),
+    H.load_mod("ui/selector/ui"),
+    H.load_mod("ui/selector/swarm")
+  )
   return selector
 end
 

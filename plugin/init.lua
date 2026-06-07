@@ -29,7 +29,7 @@ local function detect_plugin_dir(user_dir)
   error("wezterm-ai-agents: plugin_dir not detected. Pass opts.plugin_dir or load via wezterm.plugin.require.")
 end
 
-local workspace, worktree, layout, selector, agent, ui, builtin_labels, builtin_icons, editor, links, diagnostics
+local workspace, worktree, layout, selector, agent, ui, builtin_labels, builtin_icons, editor, links, diagnostics, managed
 
 -- 既知エージェント id を service/agents/*.lua のファイル名から導出する (手動リストを持たない)。
 -- ファイルを 1 枚足せば候補・検証・登録すべてに自動で乗る。glob はソート済みを返す (= 表示順は id 昇順)。
@@ -65,11 +65,12 @@ local function load_modules(plugin_dir, opts)
   workspace = load("state/workspace/init")
   workspace.setup(load("state/workspace/session"))
   layout = load("state/layout")
+  managed = load("state/managed")
 
   -- ui/ 上位層: UI・オーケストレーション (deps 経由で下位/中位を呼ぶ)
   ui = load("ui/ui")
   selector = load("ui/selector/init")
-  selector.setup(load("ui/selector/workspace"), load("ui/selector/worktree"), load("ui/selector/ui"))
+  selector.setup(load("ui/selector/workspace"), load("ui/selector/worktree"), load("ui/selector/ui"), load("ui/selector/swarm"))
 
   -- 登録対象 id を決める。enabled_agents を明示した場合はそれを尊重する (自動検出のエスケープハッチ)。
   -- 未指定 (既定) は各エージェントの command 先頭バイナリが PATH 上に在るものだけを検出して登録し、
@@ -126,6 +127,7 @@ local M = {
   selector = nil,
   agent = nil,
   ui = nil,
+  managed = nil,
 }
 
 -- install_hooks.sh の実行結果 (ran=終了コード0か, stdout=結果行) から、
@@ -265,7 +267,10 @@ function M.apply(config, user_opts)
 
   local plugin_dir = detect_plugin_dir(opts.plugin_dir)
   load_modules(plugin_dir, opts)
-  M.workspace, M.worktree, M.layout, M.selector, M.agent, M.ui = workspace, worktree, layout, selector, agent, ui
+  M.workspace, M.worktree, M.layout, M.selector, M.agent, M.ui, M.managed = workspace, worktree, layout, selector, agent, ui, managed
+
+  -- 監督集合ファイル。状態ファイルと同じ GUI pid 名前空間配下に置き、cleanup_dead_namespaces で一緒に回収される。
+  opts.managed_file = agent.ns_dir(opts.status_dir) .. "/managed.json"
 
   if opts.default_agent and not agent.get(opts.default_agent) then
     wezterm.log_error(
@@ -345,6 +350,7 @@ function M.apply(config, user_opts)
     agent = agent,
     ui = ui,
     editor = editor,
+    managed = managed,
     opts = opts,
   }
   M.deps = deps
