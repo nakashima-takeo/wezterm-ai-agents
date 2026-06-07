@@ -5,12 +5,18 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
+
+// sessionIDPattern restricts session_id to characters that are safe to interpolate into the
+// `sh -c` command below. session_id originates from agent-written state files, so it is
+// externally-influenced input that must not reach the shell unchecked.
+var sessionIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
 // sendStep is one `wezterm cli` invocation (args after "wezterm") with its stdin payload.
 type sendStep struct {
@@ -126,9 +132,15 @@ func registerPaneTools(s *server.MCPServer, cfg *Config) {
 			}
 
 			if sessionID != "" {
-				if agentName == "codex" {
+				if !sessionIDPattern.MatchString(sessionID) {
+					return mcp.NewToolResultError(fmt.Sprintf("invalid session_id: %q", sessionID)), nil
+				}
+				switch agentName {
+				case "codex":
 					agentCmd += " resume " + sessionID
-				} else {
+				case "cursor":
+					agentCmd += " --resume=" + sessionID
+				default:
 					agentCmd += " --resume " + sessionID
 				}
 			}
