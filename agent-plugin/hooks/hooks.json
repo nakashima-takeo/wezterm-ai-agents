@@ -1,0 +1,19 @@
+{
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [{ "type": "command", "command": "\"${extensionPath}/hooks/agent_status.sh\" gemini idle" }] }
+    ],
+    "SessionEnd": [
+      { "hooks": [{ "type": "command", "command": "\"${extensionPath}/hooks/agent_status.sh\" gemini clear" }] }
+    ],
+    "BeforeAgent": [
+      { "hooks": [{ "type": "command", "command": "\"${extensionPath}/hooks/agent_status.sh\" gemini working" }] }
+    ],
+    "Notification": [
+      { "hooks": [{ "type": "command", "command": "\"${extensionPath}/hooks/agent_status.sh\" gemini waiting" }] }
+    ],
+    "AfterAgent": [
+      { "hooks": [{ "type": "command", "command": "\"${extensionPath}/hooks/agent_status.sh\" gemini done" }] }
+    ]
+  }
+}

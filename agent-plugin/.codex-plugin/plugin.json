@@ -5,6 +5,7 @@
   "author": { "name": "nakashima-takeo" },
   "skills": "./skills/",
   "mcpServers": "./.mcp.json",
+  "hooks": "./hooks/codex-hooks.json",
   "interface": {
     "displayName": "WezTerm AI Agents",
     "shortDescription": "WezTerm を操作し並列エージェントを監督する",
