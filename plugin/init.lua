@@ -120,7 +120,7 @@ local function load_modules(plugin_dir, opts)
 end
 
 local M = {
-  version = "0.12.0",
+  version = "0.13.0",
   workspace = nil,
   worktree = nil,
   layout = nil,
