@@ -57,6 +57,28 @@ func gitRoot(cwd string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
+// worktreeAddArgs builds the `git worktree add` argument vector. The leading-hyphen branch
+// guard and the "--" positional separators live here (not in the handler closure) so they
+// can be unit-tested. Mirrors plugin/service/worktree/init.lua.
+func worktreeAddArgs(root, branch, wtPath, source string, newBranch bool) ([]string, error) {
+	// Reject leading-hyphen branch names: with -b they would be parsed as git options.
+	if newBranch && strings.HasPrefix(branch, "-") {
+		return nil, fmt.Errorf("invalid branch name: %q", branch)
+	}
+	args := []string{"-C", root, "worktree", "add"}
+	if newBranch {
+		args = append(args, "-b", branch)
+		if source != "" {
+			args = append(args, "--", wtPath, source)
+		} else {
+			args = append(args, "--", wtPath)
+		}
+	} else {
+		args = append(args, "--", wtPath, branch)
+	}
+	return args, nil
+}
+
 func registerWorktreeTools(s *server.MCPServer) {
 	s.AddTool(
 		mcp.NewTool("list_worktrees",
@@ -130,22 +152,9 @@ func registerWorktreeTools(s *server.MCPServer) {
 				wtPath = filepath.Join(filepath.Dir(root), safeBranch)
 			}
 
-			// Reject leading-hyphen branch names: with -b they would be parsed as git options.
-			// Positional paths/branches are guarded with "--" instead (mirrors plugin/service/worktree/init.lua).
-			if newBranch && strings.HasPrefix(branch, "-") {
-				return mcp.NewToolResultError(fmt.Sprintf("invalid branch name: %q", branch)), nil
-			}
-
-			args := []string{"-C", root, "worktree", "add"}
-			if newBranch {
-				args = append(args, "-b", branch)
-				if source != "" {
-					args = append(args, "--", wtPath, source)
-				} else {
-					args = append(args, "--", wtPath)
-				}
-			} else {
-				args = append(args, "--", wtPath, branch)
+			args, err := worktreeAddArgs(root, branch, wtPath, source, newBranch)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			cmd := exec.Command("git", args...)
