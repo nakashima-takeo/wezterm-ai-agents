@@ -2,7 +2,7 @@ package.path = package.path .. ";test/?.lua"
 local H = require("helper")
 local test = H.test
 
-local hook_path = H.plugin_dir .. "/hooks/agent_status.sh"
+local hook_path = H.plugin_dir .. "/agent-plugin/hooks/agent_status.sh"
 
 -- フックは WEZTERM_UNIX_SOCKET(=…/gui-sock-<pid>) 末尾の PID で名前空間化する。
 -- テストは固定 socket を渡して決定的にし、その名前空間配下を検証する。
@@ -108,9 +108,12 @@ test("正常系：アトミック書き込み（tmpファイル経由のmv）で
   )
   os.execute(cmd)
 
-  -- .tmp ファイルが残っていないことを確認
-  local f = io.open(ns(tmp) .. "/wezterm-agent-5.tmp", "r")
-  H.assert_nil(f)
+  -- 書き込み後に PID 一意名 tmp ($STATE_FILE.tmp.$$) が掃除されていることを確認する。
+  -- 固定名 .tmp は production が二度と生成しないため、glob で .tmp.* の残骸を見る。
+  local p = io.popen("ls " .. ns(tmp) .. "/wezterm-agent-5.tmp.* 2>/dev/null")
+  local leftover = p:read("*a")
+  p:close()
+  H.assert_eq(leftover, "")
 
   os.execute("rm -rf " .. tmp)
 end)

@@ -12,7 +12,7 @@
 local wezterm = require("wezterm")
 
 -- 状態ファイルの保存先。XDG_STATE_HOME 準拠の永続領域に置く (OS の reaping 対象外)。
--- hooks/agent_status.sh のフォールバックと同一規則 (末尾スラッシュ正規化なしの素朴連結) で揃える。
+-- agent-plugin/hooks/agent_status.sh のフォールバックと同一規則 (末尾スラッシュ正規化なしの素朴連結) で揃える。
 local function default_status_dir()
   local base = os.getenv("XDG_STATE_HOME")
   if not base or base == "" then base = wezterm.home_dir .. "/.local/state" end
@@ -29,7 +29,7 @@ local function detect_plugin_dir(user_dir)
   error("wezterm-ai-agents: plugin_dir not detected. Pass opts.plugin_dir or load via wezterm.plugin.require.")
 end
 
-local workspace, worktree, layout, selector, agent, ui, builtin_labels, builtin_icons, editor, links, diagnostics
+local workspace, worktree, layout, selector, agent, ui, builtin_labels, builtin_icons, editor, links, diagnostics, managed
 
 -- 既知エージェント id を service/agents/*.lua のファイル名から導出する (手動リストを持たない)。
 -- ファイルを 1 枚足せば候補・検証・登録すべてに自動で乗る。glob はソート済みを返す (= 表示順は id 昇順)。
@@ -65,11 +65,12 @@ local function load_modules(plugin_dir, opts)
   workspace = load("state/workspace/init")
   workspace.setup(load("state/workspace/session"))
   layout = load("state/layout")
+  managed = load("state/managed")
 
   -- ui/ 上位層: UI・オーケストレーション (deps 経由で下位/中位を呼ぶ)
   ui = load("ui/ui")
   selector = load("ui/selector/init")
-  selector.setup(load("ui/selector/workspace"), load("ui/selector/worktree"), load("ui/selector/ui"))
+  selector.setup(load("ui/selector/workspace"), load("ui/selector/worktree"), load("ui/selector/ui"), load("ui/selector/command_center"))
 
   -- 登録対象 id を決める。enabled_agents を明示した場合はそれを尊重する (自動検出のエスケープハッチ)。
   -- 未指定 (既定) は各エージェントの command 先頭バイナリが PATH 上に在るものだけを検出して登録し、
@@ -126,26 +127,8 @@ local M = {
   selector = nil,
   agent = nil,
   ui = nil,
+  managed = nil,
 }
-
--- install_hooks.sh の実行結果 (ran=終了コード0か, stdout=結果行) から、
--- ユーザーに知らせるべき失敗文言を返す (知らせる必要が無ければ nil)。原因を推測せず、
--- sh が返した結果コードを原因別に解釈する。symlink/unknown スキップや成功は通知しない。
-local function install_hooks_diagnostic(ran, stdout)
-  stdout = stdout or ""
-  -- ユーザーが体感する機能名 (タブ等の状態表示) で、原因と次の一手を示す。内部用語と推測は使わない。
-  local headline = "エージェントの状態表示を有効化できませんでした。"
-  if stdout:find("jq-missing", 1, true) then return headline .. "jq を入れて WezTerm を再起動してください" end
-  -- 既存設定が不正な JSON で触れなかったエージェントを集める (握りつぶさず id 付きで知らせる)。
-  local broken = {}
-  for id in stdout:gmatch("skip%-invalid%-json%s+(%S+)") do
-    broken[#broken + 1] = id
-  end
-  if #broken > 0 then return headline .. "設定ファイルが壊れています: " .. table.concat(broken, ", ") end
-  if not ran then return headline .. "手動設定は README を参照してください" end
-  return nil
-end
-M._install_hooks_diagnostic = install_hooks_diagnostic
 
 -- ============== Defaults ==============
 
@@ -166,6 +149,15 @@ local default_opts = {
   nerd_font = true,
   font = nil, -- primary フォント (family 文字列 or { family=..., 属性 })。nil = JetBrains Mono。日本語フォールバックは自動付加
   status_dir = default_status_dir(),
+  -- 司令塔 (CMD+SHIFT+M) で監督対象が空→非空になった時、supervise オーケストレーターを最左タブで自動起動する。
+  auto_orchestrator = true,
+  -- オーケストレーターに使うエージェント。supervise の決定的起動の渡し方が各社で異なるため分岐に使う。
+  orchestrator_agent = "claude", -- "claude" | "codex" | "gemini"
+  -- オーケストレーターを起動する本体＋フラグ (supervise 起動トークンはプラグインが付けるので不要)。
+  -- orchestrator_agent を変えたらこちらも対応する本体に変える (例: codex なら "codex --yolo")。
+  orchestrator_command = "claude --dangerously-skip-permissions",
+  -- orchestrator_system_prompt は既定なし (未設定)。監督エージェントに固定システムプロンプトを
+  -- 渡したい時だけ opts に文字列を設定する (--append-system-prompt として付与。examples/custom.lua 参照)。
   enabled_agents = nil, -- nil = PATH 上にバイナリが在るエージェントを自動検出して登録; or { "claude" } で明示固定
   default_agent = nil, -- nil = first registered; or "claude" to set default agent for Cmd+Shift+C
   default_editor = nil, -- nil = auto-detect (code/cursor/windsurf/zed/subl); or "/usr/local/bin/cursor" etc.
@@ -197,7 +189,13 @@ local default_opts = {
   install_ui_tab_title = true,
   install_ui_status = true,
   install_keybinds = true,
+  -- 検出済み各エージェントへ agent-plugin (状態追跡フック + MCP + supervise skill) を起動時に
+  -- 自動導入する (各社プラグイン CLI 経由・冪等)。false で自動導入を止め手動導入に任せる。
   install_hooks = true,
+  -- MCP サーバーバイナリを起動時にプロビジョンする (Release から DL、無ければ go build フォールバック)。
+  install_mcp = true,
+  mcp_repo = "https://github.com/nakashima-takeo/wezterm-ai-agents",
+  mcp_version = nil, -- nil = "v"..version を使う。固定したいときのみ明示 ("v0.12.0" / "latest")
   disabled_keybinds = {},
   keybinds = {},
   modifier_prefix = wezterm.target_triple:find("darwin") and "CMD" or "CTRL",
@@ -265,11 +263,24 @@ function M.apply(config, user_opts)
 
   local plugin_dir = detect_plugin_dir(opts.plugin_dir)
   load_modules(plugin_dir, opts)
-  M.workspace, M.worktree, M.layout, M.selector, M.agent, M.ui = workspace, worktree, layout, selector, agent, ui
+  M.workspace, M.worktree, M.layout, M.selector, M.agent, M.ui, M.managed = workspace, worktree, layout, selector, agent, ui, managed
+
+  -- 監督集合ファイルと、起動中オーケストレーターの pane_id ファイル。状態ファイルと同じ GUI pid
+  -- 名前空間配下に置き、cleanup_dead_namespaces で一緒に回収される。
+  opts.managed_file = agent.ns_dir(opts.status_dir) .. "/managed.json"
+  opts.orchestrator_file = agent.ns_dir(opts.status_dir) .. "/orchestrator"
 
   if opts.default_agent and not agent.get(opts.default_agent) then
     wezterm.log_error(
       "wezterm-ai-agents: default_agent '" .. opts.default_agent .. "' is not registered. Check enabled_agents or spelling."
+    )
+  end
+
+  -- orchestrator_agent は build_command が claude/codex/gemini のみ受理する。誤値は司令塔トグル時まで
+  -- 顕在化せず managed.json 書き換え後に失敗するため、default_agent と同様に起動時へ前倒しで通知する。
+  if opts.auto_orchestrator and not ({ claude = true, codex = true, gemini = true })[opts.orchestrator_agent] then
+    wezterm.log_error(
+      "wezterm-ai-agents: orchestrator_agent '" .. tostring(opts.orchestrator_agent) .. "' must be one of claude/codex/gemini."
     )
   end
 
@@ -292,30 +303,35 @@ function M.apply(config, user_opts)
     -- 死んだ GUI プロセスの状態ファイル名前空間と、旧バージョンのフラット残置を回収する。
     local ok, err = pcall(agent.cleanup_dead_namespaces, opts)
     if not ok then wezterm.log_warn("[ai-agents] cleanup_dead_namespaces failed: " .. tostring(err)) end
-    -- 各エージェントの設定ファイルに状態追跡フックを冪等マージする (既定 ON)。複数回発火しても冪等。
-    -- jq 欠如・不正JSON など「知らせるべき失敗」は原因別に diagnostics へ上げる (symlink/unknown スキップは正常)。
-    -- 補助機能なので pcall で隔離し、万一の失敗 (run_child_process が bash を spawn できない等) が
+    -- 検出済み各エージェントへ状態追跡フックを導入する (既定 ON)。複数回発火しても install-if-absent で冪等。
+    -- 補助機能なので pcall で隔離し、万一の失敗 (background_child_process が bash を spawn できない等) が
     -- 後段の update_all を巻き込まないようにする (直前の cleanup_dead_namespaces と同じ防御方針)。
     if opts.install_hooks then
-      local hook_ok, hook_err = pcall(function()
-        local cmd = { "bash", M.hooks_dir .. "/install_hooks.sh", M.hooks_dir }
+      -- 検出済み各エージェントへ agent-plugin を導入し状態追跡を有効化する。他社の設定ファイルを
+      -- 直接書き換えず各社のプラグイン CLI に委譲する (境界を尊重)。背景実行で gui-startup を
+      -- ブロックしない (各社 CLI の spawn コストを避ける)。install-if-absent で冪等。
+      pcall(function()
+        local cmd = { "bash", M.hooks_dir .. "/install_plugins.sh", plugin_dir }
         for _, impl in ipairs(agent.all()) do
           cmd[#cmd + 1] = impl.id
         end
-        local ran, stdout = wezterm.run_child_process(cmd)
-        -- 他プロダクトの設定ファイルを実際に書き換えた (applied) ものは足跡をログに残す (透明性)。
-        -- unchanged/skip は書き込みなしなので出さない。ログ止まりでタブは生やさない (ノイズ回避)。
-        local applied = {}
-        for id in (stdout or ""):gmatch("applied (%S+)") do
-          applied[#applied + 1] = id
-        end
-        if #applied > 0 then
-          wezterm.log_info("[ai-agents] install_hooks: 設定にフックを書き込みました: " .. table.concat(applied, ", "))
-        end
-        local msg = install_hooks_diagnostic(ran, stdout)
-        if msg then diagnostics.report("install_hooks", msg) end
+        wezterm.background_child_process(cmd)
       end)
-      if not hook_ok then wezterm.log_warn("[ai-agents] install_hooks failed: " .. tostring(hook_err)) end
+    end
+    -- MCP サーバーバイナリを共有パス ($XDG_STATE_HOME/wezterm-ai-agents/bin) に用意する。
+    -- Release から DL、無ければ go build フォールバック。背景実行で UI を止めない。
+    if opts.install_mcp then
+      pcall(
+        function()
+          wezterm.background_child_process({
+            "bash",
+            M.hooks_dir .. "/install_mcp.sh",
+            opts.mcp_repo,
+            opts.mcp_version or ("v" .. M.version),
+            plugin_dir .. "/agent-plugin/mcp",
+          })
+        end
+      )
     end
     wezterm.plugin.update_all()
   end)
@@ -345,6 +361,7 @@ function M.apply(config, user_opts)
     agent = agent,
     ui = ui,
     editor = editor,
+    managed = managed,
     opts = opts,
   }
   M.deps = deps
@@ -452,7 +469,10 @@ function M.apply(config, user_opts)
         last_sync_tick = now
         pcall(workspace.sync_all, opts.workspace, agent, layout, opts)
         -- 生存 pane に対応しない孤立状態ファイルを掃除する (reaping を失った分を継続的に解消)。
-        pcall(agent.sweep_orphan_files, opts)
+        -- 同じ生存 pane 集合で監督集合からも閉じたペインを剪定する。これがないと閉じたペインが
+        -- managed.json に残り続け、オーケストレーターの「監督集合が空なら終了」が成立しない。
+        local ok, live = pcall(agent.sweep_orphan_files, opts)
+        if ok and live then pcall(managed.prune, opts.managed_file, live) end
       end
     end)
   end

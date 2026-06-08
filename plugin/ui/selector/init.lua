@@ -13,14 +13,15 @@ local M = {}
 
 M.pinned_windows = {}
 
-local sel_ws, sel_wt, sel_ui
+local sel_ws, sel_wt, sel_ui, sel_cc
 
 -- plugin/init.lua から各サブモジュールを受け取り結線する。
--- 共有 UI ヘルパーを workspace/worktree の両 UI に二段注入し、maybe_prefetch を再エクスポートする。
-function M.setup(ws, wt, ui)
-  sel_ws, sel_wt, sel_ui = ws, wt, ui
+-- 共有 UI ヘルパーを workspace/worktree/command_center の各 UI に注入し、maybe_prefetch を再エクスポートする。
+function M.setup(ws, wt, ui, command_center)
+  sel_ws, sel_wt, sel_ui, sel_cc = ws, wt, ui, command_center
   ws.setup(ui)
   wt.setup(ui)
+  command_center.setup(ui)
   M.maybe_prefetch = wt.maybe_prefetch
 end
 
@@ -29,9 +30,11 @@ end
 function M.agent_selector(window, pane, deps)
   local opts = deps.opts
   local agents = deps.agent.all()
+  local icon = (opts.icons and opts.icons.agent) or ""
+  local prefix = icon ~= "" and (icon .. " ") or ""
   local choices = {}
   for _, impl in ipairs(agents) do
-    table.insert(choices, { id = impl.id, label = "\xEF\x91\x8A " .. impl.display_name })
+    table.insert(choices, { id = impl.id, label = prefix .. impl.display_name })
   end
 
   window:perform_action(
@@ -253,6 +256,14 @@ function M.build_keybinds(deps)
     mods = "CMD|SHIFT",
     action = wezterm.action_callback(function(window, pane) sel_ui.help_selector(window, pane, deps, help_items) end),
   }, { group = "help_group_window", desc = "help_help" })
+
+  -- Command center (toggle which agent panes the orchestrator supervises).
+  -- Placed after the whole window group so the help overlay does not split that group.
+  add("command_center", {
+    key = "M",
+    mods = "CMD|SHIFT",
+    action = wezterm.action_callback(function(window, pane) sel_cc.open(window, pane, deps) end),
+  }, { group = "help_group_command_center", desc = "help_command_center", runnable = true })
 
   -- ヘルプに表示しないキー (パススルー / ナビゲーション / 行編集)
   add("disable_quit", { key = "q", mods = "CMD", action = act.Nop }) -- CMD+Q 誤操作防止

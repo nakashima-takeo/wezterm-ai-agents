@@ -1,0 +1,10 @@
+# gemini 監督オーケストレーターの決定的起動コマンド。WezTerm プラグインが監督開始時に
+# この /supervise を起動して呼ぶ。手順そのものは共有スキル supervise (この extension が
+# skills/ で提供) に一元化し、ここでは「そのスキルに従って始めよ」と指示するだけにする
+# (claude の /wezterm-ai-agents:supervise・codex の $supervise と同じ役割)。
+description = "WezTerm の監督対象エージェント群を見守るオーケストレーターを開始する"
+prompt = """
+あなたはこのセッションで WezTerm 並列 AI エージェントの監督オーケストレーターになる。
+この extension が提供する `supervise` スキルの手順に厳密に従って動作せよ。
+まず MCP ツール get_agents で監督対象を把握し、スキルの監視ループを開始すること。
+"""

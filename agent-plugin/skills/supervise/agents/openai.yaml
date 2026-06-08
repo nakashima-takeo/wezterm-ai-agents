@@ -1,0 +1,10 @@
+# Codex-specific skill config (read by the harness, not the model).
+# The orchestrator must start in the supervise role deterministically — the WezTerm plugin
+# launches codex with `$supervise` — so disable implicit (description-match) invocation; the
+# explicit `$supervise` invocation still works. This mirrors Claude's disable-model-invocation.
+interface:
+  display_name: "Supervise"
+  short_description: "WezTerm の監督対象エージェントを見守るオーケストレーター"
+  default_prompt: "Use $supervise to watch and steer the agents I put under supervision in WezTerm."
+policy:
+  allow_implicit_invocation: false

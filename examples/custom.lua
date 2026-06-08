@@ -23,8 +23,8 @@ ai.apply(config, {
   workspace = {
     -- Where workspace definitions are persisted.
     file = wezterm.home_dir .. "/.wezterm-workspaces.json",
-    -- Name for the initial workspace.
-    default_workspace = "default",
+    -- The initial workspace name follows WezTerm's own `config.default_workspace`;
+    -- set that instead of a key here (this block does not control it).
   },
 
   worktree = {
@@ -65,9 +65,23 @@ ai.apply(config, {
   -- How often (seconds) workspace state (tabs, agents, layouts) is synced to JSON.
   session_sync_interval = 10,
 
-  -- Auto-install agent state-tracking hooks into each agent's config on startup
-  -- (default: true; requires `jq`). Symlinked configs (e.g. dotfiles) are skipped.
-  -- Set false to manage hooks yourself (see README "手動でのHooks設定").
+  -- Supervisor orchestrator: auto-launched when you put an agent under supervision
+  -- in the command center (CMD+SHIFT+M). It watches managed agents and only asks you
+  -- for uncertain/irreversible decisions. Set auto_orchestrator = false to disable.
+  -- A fixed system prompt for the supervisor (optional, multi-line OK):
+  orchestrator_system_prompt = [[
+You are a cautious supervisor.
+- Always confirm with the human before irreversible/outward-facing actions (push, merge to main, deletes).
+]],
+  -- Which agent runs the orchestrator (claude | codex | gemini). The supervise launch token
+  -- differs per agent and is added by the plugin; just match orchestrator_command to it.
+  -- orchestrator_agent = "claude",
+  -- The binary + flags used to launch it (e.g. "codex --yolo" / "gemini --approval-mode=yolo"):
+  -- orchestrator_command = "claude --dangerously-skip-permissions",
+
+  -- Auto-install agent-plugin (state-tracking hooks + MCP + supervise skill) into each detected
+  -- agent on startup, via each vendor's plugin CLI (idempotent; no jq, no config-file surgery).
+  -- codex needs a one-time `/hooks` trust. Set false to install plugins yourself (see README).
   install_hooks = false,
 })
 

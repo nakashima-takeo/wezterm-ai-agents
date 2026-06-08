@@ -1,0 +1,11 @@
+{
+  "name": "wezterm-ai-agents",
+  "owner": { "name": "nakashima-takeo" },
+  "plugins": [
+    {
+      "name": "wezterm-ai-agents",
+      "source": "./agent-plugin",
+      "description": "WezTerm のワークスペース/worktree/並列エージェント操作と監督オーケストレーターを提供する MCP プラグイン"
+    }
+  ]
+}

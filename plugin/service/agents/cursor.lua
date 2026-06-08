@@ -2,7 +2,8 @@
 -- State comes from the unified JSON state file:
 --   <status_dir>/<gui_pid>/wezterm-agent-<pane_id>
 --   {"agent":"cursor","state":"...","ts":...,"session_id":"..."}
--- Written by hooks/agent_status.sh, invoked from .cursor/hooks.json.
+-- Written by agent_status.sh。cursor はプラグイン CLI を持たない二級市民: 自動導入の対象外
+-- (状態追跡は手動で .cursor/hooks.json に agent_status.sh を設定するか、非対応)。
 
 local M = {}
 
