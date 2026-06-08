@@ -12,7 +12,7 @@ type Config struct {
 	Agents         map[string]string
 }
 
-// defaultStatusDir matches the plugin (init.lua) and hooks/agent_status.sh: the XDG state
+// defaultStatusDir matches the plugin (init.lua) and agent-plugin/hooks/agent_status.sh: the XDG state
 // base, so the MCP server reads the same files the plugin writes without any env override.
 func defaultStatusDir() string {
 	base := os.Getenv("XDG_STATE_HOME")

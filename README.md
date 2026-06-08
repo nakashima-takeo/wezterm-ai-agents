@@ -225,7 +225,7 @@ return {
 
 `init.lua` で登録: `agent.register(load("service/agents/myagent"))`
 
-エージェント側のhooksから `hooks/agent_status.sh <id> <state>` を呼ぶように設定してください。
+エージェント側のhooksから `agent-plugin/hooks/agent_status.sh <id> <state>` を呼ぶように設定してください。
 
 ## ライセンス
 
