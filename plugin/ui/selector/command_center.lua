@@ -107,8 +107,10 @@ local function launch_orchestrator(window, pane, deps)
   local opts = deps.opts
   local shell = os.getenv("SHELL") or "/bin/sh"
   local cwd = deps.workspace and deps.workspace.get_cwd_path(pane) or nil
-  local cmd = M.build_command(opts.orchestrator_agent, opts.orchestrator_command, opts.orchestrator_system_prompt, deps.agent.shell_quote)
+  -- build_command は orchestrator_agent が未知だと error する。spawn と一緒に pcall で隔離し、
+  -- 失敗が action_callback の外へ伝播して無反応になるのを防ぐ (誤値は apply() で起動時に通知済み)。
   local ok, new_pane = pcall(function()
+    local cmd = M.build_command(opts.orchestrator_agent, opts.orchestrator_command, opts.orchestrator_system_prompt, deps.agent.shell_quote)
     local _, p = window:mux_window():spawn_tab({
       args = { shell, "-lc", cmd },
       cwd = cwd,

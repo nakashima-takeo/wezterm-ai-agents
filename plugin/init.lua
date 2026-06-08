@@ -12,7 +12,7 @@
 local wezterm = require("wezterm")
 
 -- 状態ファイルの保存先。XDG_STATE_HOME 準拠の永続領域に置く (OS の reaping 対象外)。
--- hooks/agent_status.sh のフォールバックと同一規則 (末尾スラッシュ正規化なしの素朴連結) で揃える。
+-- agent-plugin/hooks/agent_status.sh のフォールバックと同一規則 (末尾スラッシュ正規化なしの素朴連結) で揃える。
 local function default_status_dir()
   local base = os.getenv("XDG_STATE_HOME")
   if not base or base == "" then base = wezterm.home_dir .. "/.local/state" end
@@ -276,6 +276,14 @@ function M.apply(config, user_opts)
     )
   end
 
+  -- orchestrator_agent は build_command が claude/codex/gemini のみ受理する。誤値は司令塔トグル時まで
+  -- 顕在化せず managed.json 書き換え後に失敗するため、default_agent と同様に起動時へ前倒しで通知する。
+  if opts.auto_orchestrator and not ({ claude = true, codex = true, gemini = true })[opts.orchestrator_agent] then
+    wezterm.log_error(
+      "wezterm-ai-agents: orchestrator_agent '" .. tostring(opts.orchestrator_agent) .. "' must be one of claude/codex/gemini."
+    )
+  end
+
   local icon_set = opts.nerd_font and builtin_icons.nerd or builtin_icons.unicode
   opts.icons = icon_set
   for _, impl in ipairs(agent.all()) do
@@ -295,9 +303,8 @@ function M.apply(config, user_opts)
     -- 死んだ GUI プロセスの状態ファイル名前空間と、旧バージョンのフラット残置を回収する。
     local ok, err = pcall(agent.cleanup_dead_namespaces, opts)
     if not ok then wezterm.log_warn("[ai-agents] cleanup_dead_namespaces failed: " .. tostring(err)) end
-    -- 各エージェントの設定ファイルに状態追跡フックを冪等マージする (既定 ON)。複数回発火しても冪等。
-    -- jq 欠如・不正JSON など「知らせるべき失敗」は原因別に diagnostics へ上げる (symlink/unknown スキップは正常)。
-    -- 補助機能なので pcall で隔離し、万一の失敗 (run_child_process が bash を spawn できない等) が
+    -- 検出済み各エージェントへ状態追跡フックを導入する (既定 ON)。複数回発火しても install-if-absent で冪等。
+    -- 補助機能なので pcall で隔離し、万一の失敗 (background_child_process が bash を spawn できない等) が
     -- 後段の update_all を巻き込まないようにする (直前の cleanup_dead_namespaces と同じ防御方針)。
     if opts.install_hooks then
       -- 検出済み各エージェントへ agent-plugin を導入し状態追跡を有効化する。他社の設定ファイルを
