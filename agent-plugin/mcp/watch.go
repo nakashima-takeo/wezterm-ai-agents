@@ -62,21 +62,28 @@ func readAgentStates(dir string) map[int]AgentStatus {
 	return out
 }
 
-// readManagedSet reads the supervision registry (managed.json: {"managed":[3,6,...]}).
-func readManagedSet(dir string) map[int]bool {
+// readManagedSet reads the supervision registry (managed.json: {"<ws>":[3,6,...], ...}) for one
+// workspace. An empty ws (manual setup / legacy) reads the union of every workspace's set.
+func readManagedSet(dir, ws string) map[int]bool {
 	out := map[int]bool{}
 	data, err := os.ReadFile(filepath.Join(dir, "managed.json"))
 	if err != nil {
 		return out
 	}
-	var doc struct {
-		Managed []int `json:"managed"`
-	}
+	var doc map[string][]int
 	if json.Unmarshal(data, &doc) != nil {
 		return out
 	}
-	for _, id := range doc.Managed {
-		out[id] = true
+	if ws != "" {
+		for _, id := range doc[ws] {
+			out[id] = true
+		}
+		return out
+	}
+	for _, ids := range doc {
+		for _, id := range ids {
+			out[id] = true
+		}
 	}
 	return out
 }
@@ -95,7 +102,7 @@ type ManagedAgent struct {
 func managedSnapshot(cfg *Config) []ManagedAgent {
 	dir := nsDir(cfg)
 	states := readAgentStates(dir)
-	managed := readManagedSet(dir)
+	managed := readManagedSet(dir, cfg.Workspace)
 	out := make([]ManagedAgent, 0, len(managed))
 	for pid := range managed {
 		a := ManagedAgent{PaneID: pid, State: "unknown"}
@@ -116,7 +123,7 @@ type paneSnap struct {
 func managedStates(cfg *Config) map[int]paneSnap {
 	dir := nsDir(cfg)
 	states := readAgentStates(dir)
-	managed := readManagedSet(dir)
+	managed := readManagedSet(dir, cfg.Workspace)
 	out := make(map[int]paneSnap, len(managed))
 	for pid := range managed {
 		snap := paneSnap{state: "unknown"}

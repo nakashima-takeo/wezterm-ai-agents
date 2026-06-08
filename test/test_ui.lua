@@ -153,6 +153,20 @@ test("正常系：idle状態ではアイコンが落ちる", function()
   end)
 end)
 
+test("監督オーケストレーターのタブは専用アイコンで描画される (idle でも落ちない)", function()
+  local ui = load_mod("ui/ui")
+  local deps = tab_deps(function() return { icons = { idle = "I" }, colors = {} }, "idle" end)
+  deps.opts.icons = { orchestrator = "EYE" }
+  deps.opts.ui.tab_title.orchestrator_fg = "#f9e2af"
+  deps.opts.orchestrator_file = "o"
+  deps.managed = { is_orchestrator = function(_, pid) return pid == "p1" end }
+  with_mux(120, function()
+    local tab = { active_pane = { pane_id = "p1", title = "claude" }, window_id = 1, is_active = true }
+    local txt = seg_text(ui.format_tab_title(tab, deps, nil, 1))
+    H.assert_match(txt, "EYE")
+  end)
+end)
+
 test("正常系：長いタイトルは…付きで切り詰められる", function()
   local ui = load_mod("ui/ui")
   local deps = tab_deps(function() return nil end)

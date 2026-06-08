@@ -8,6 +8,7 @@ local unicode = {
   pin = "📌",
   folder = "📁",
   agent = "🤖",
+  orchestrator = "👁",
 }
 
 local nerd = {
@@ -20,6 +21,7 @@ local nerd = {
   pin = "\xF3\xB0\x9B\x83",
   folder = "\xF3\xB0\x89\x8B",
   agent = "\xEF\x91\x8A",
+  orchestrator = "\xEF\x81\xAE", -- nf-fa-eye
 }
 
 return { unicode = unicode, nerd = nerd }

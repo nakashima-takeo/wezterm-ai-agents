@@ -149,7 +149,8 @@ local default_opts = {
   nerd_font = true,
   font = nil, -- primary フォント (family 文字列 or { family=..., 属性 })。nil = JetBrains Mono。日本語フォールバックは自動付加
   status_dir = default_status_dir(),
-  -- 司令塔 (CMD+SHIFT+M) で監督対象が空→非空になった時、supervise オーケストレーターを最左タブで自動起動する。
+  -- 司令塔 (CMD+SHIFT+M) は現在のワークスペースだけを対象に監督対象をトグルする。空→非空になった時、
+  -- そのワークスペース用の supervise オーケストレーターを最左タブに自動起動する (フォーカスは奪わない)。
   auto_orchestrator = true,
   -- オーケストレーターに使うエージェント。supervise の決定的起動の渡し方が各社で異なるため分岐に使う。
   orchestrator_agent = "claude", -- "claude" | "codex" | "gemini"
@@ -176,6 +177,7 @@ local default_opts = {
       accent_fg = "#b4befe",
       inactive_bg = "#11111b",
       inactive_fg = "#585b70",
+      orchestrator_fg = "#f9e2af", -- 監督オーケストレーターのタブを一目で見分ける色 (Catppuccin yellow)
     },
     right_status = {
       fg = "#a6adc8",
@@ -268,7 +270,7 @@ function M.apply(config, user_opts)
   -- 監督集合ファイルと、起動中オーケストレーターの pane_id ファイル。状態ファイルと同じ GUI pid
   -- 名前空間配下に置き、cleanup_dead_namespaces で一緒に回収される。
   opts.managed_file = agent.ns_dir(opts.status_dir) .. "/managed.json"
-  opts.orchestrator_file = agent.ns_dir(opts.status_dir) .. "/orchestrator"
+  opts.orchestrator_file = agent.ns_dir(opts.status_dir) .. "/orchestrator.json"
 
   if opts.default_agent and not agent.get(opts.default_agent) then
     wezterm.log_error(

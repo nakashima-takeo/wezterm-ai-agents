@@ -64,14 +64,19 @@ local function mock_pane(id, title)
   }
 end
 
-H.test("オーケストレーター自身のペインは一覧から除外される", function()
-  local mock_win = {
-    tabs = function()
-      return { { panes = function() return { mock_pane(1, "a"), mock_pane(2, "orch"), mock_pane(3, "b") } end } }
-    end,
-  }
+H.test("自ws のオーケストレーターを除外し、他ws のペインも含めない", function()
+  local function mock_win(ws, panes)
+    return {
+      get_workspace = function() return ws end,
+      tabs = function()
+        return { { panes = function() return panes end } }
+      end,
+    }
+  end
+  local win_a = mock_win("a", { mock_pane(1, "a"), mock_pane(2, "orch"), mock_pane(3, "b") })
+  local win_b = mock_win("b", { mock_pane(7, "other-ws") })
   local orig = wezterm.mux.all_windows
-  wezterm.mux.all_windows = function() return { mock_win } end
+  wezterm.mux.all_windows = function() return { win_a, win_b } end
 
   local deps = {
     opts = { managed_file = "m", orchestrator_file = "o" },
@@ -82,7 +87,7 @@ H.test("オーケストレーター自身のペインは一覧から除外され
     agent = { resolve = function() return nil, nil end },
   }
 
-  local ok, rows = pcall(cc.collect_rows, deps)
+  local ok, rows = pcall(cc.collect_rows, deps, "a")
   wezterm.mux.all_windows = orig
   H.assert_true(ok, "collect_rows が例外なく動く")
 
@@ -93,6 +98,7 @@ H.test("オーケストレーター自身のペインは一覧から除外され
   H.assert_true(ids[1], "通常ペインは含まれる")
   H.assert_true(ids[3], "通常ペインは含まれる")
   H.assert_false(ids[2], "オーケストレーター自身は除外される")
+  H.assert_false(ids[7], "他ワークスペースのペインは含まれない")
   H.assert_eq(#rows, 2, "除外後は2件")
 end)
 

@@ -1,10 +1,13 @@
--- Command center (司令塔) overlay: lists every agent pane and lets the human toggle which ones are
--- supervised by the orchestrator. Supervised (✓) and unsupervised (○) are shown in separate
--- sections; selecting a pane flips its membership and re-opens the console so multiple panes
--- can be toggled in place. The always-on tab/right-status carry the ambient cue and stay unchanged.
+-- Command center (司令塔) overlay: lists the current workspace's agent panes and lets the human
+-- toggle which ones are supervised by that workspace's orchestrator. Supervised (✓) and
+-- unsupervised (○) are shown in separate sections; selecting a pane flips its membership and
+-- re-opens the console so multiple panes can be toggled in place. Supervision is per-workspace:
+-- each workspace keeps its own managed set and its own orchestrator. The always-on tab/right-status
+-- carry the ambient cue and stay unchanged.
 --
 -- Data join: managed set (state/managed) X live state (service/agent.resolve) X mux panes.
--- Only panes still alive in the mux are shown, so closed panes self-hide.
+-- Only panes in the current workspace and still alive in the mux are shown, so closed panes
+-- and other workspaces self-hide.
 
 local wezterm = require("wezterm")
 local act = wezterm.action
@@ -16,30 +19,32 @@ local ui
 -- selector/init.lua injects the shared UI helpers (selector/ui.lua).
 function M.setup(ui_mod) ui = ui_mod end
 
--- Every alive pane that is either a detected agent or already in the managed set.
--- The orchestrator's own pane is always excluded (self-supervision guard).
-function M.collect_rows(deps)
+-- Every alive pane in workspace `ws` that is either a detected agent or already in its managed set.
+-- The workspace's orchestrator pane is always excluded (self-supervision guard).
+function M.collect_rows(deps, ws)
   local opts = deps.opts
-  local set = deps.managed.read(opts.managed_file)
-  local orchestrator = deps.managed.read_orchestrator(opts.orchestrator_file)
+  local set = deps.managed.read(opts.managed_file, ws)
+  local orchestrator = deps.managed.read_orchestrator(opts.orchestrator_file, ws)
   local rows = {}
   for _, win in ipairs(wezterm.mux.all_windows()) do
-    for _, tab in ipairs(win:tabs()) do
-      for _, p in ipairs(tab:panes()) do
-        local pid = p:pane_id()
-        local impl, st = deps.agent.resolve(pid, opts)
-        local is_managed = set[pid] == true
-        -- オーケストレーター自身のペインは一覧から除外する (自己監督の防止)。
-        if pid ~= orchestrator and (impl or is_managed) then
-          st = st or "idle"
-          rows[#rows + 1] = {
-            pane_id = pid,
-            managed = is_managed,
-            name = (impl and (impl.display_name or impl.id)) or "?",
-            icon = (impl and impl.icons and impl.icons[st]) or "",
-            color = (impl and impl.colors and impl.colors[st]) or nil,
-            title = p:get_title() or "",
-          }
+    if win:get_workspace() == ws then
+      for _, tab in ipairs(win:tabs()) do
+        for _, p in ipairs(tab:panes()) do
+          local pid = p:pane_id()
+          local impl, st = deps.agent.resolve(pid, opts)
+          local is_managed = set[pid] == true
+          -- オーケストレーター自身のペインは一覧から除外する (自己監督の防止)。
+          if pid ~= orchestrator and (impl or is_managed) then
+            st = st or "idle"
+            rows[#rows + 1] = {
+              pane_id = pid,
+              managed = is_managed,
+              name = (impl and (impl.display_name or impl.id)) or "?",
+              icon = (impl and impl.icons and impl.icons[st]) or "",
+              color = (impl and impl.colors and impl.colors[st]) or nil,
+              title = p:get_title() or "",
+            }
+          end
         end
       end
     end
@@ -95,18 +100,21 @@ function M.build_command(agent_id, base, system_prompt, shell_quote)
   error("unknown orchestrator_agent: " .. tostring(agent_id))
 end
 
--- 記録済みオーケストレーターのペインが今も生きているか。
-local function orchestrator_alive(deps)
-  local oid = deps.managed.read_orchestrator(deps.opts.orchestrator_file)
+-- 記録済みオーケストレーター (ワークスペース ws 用) のペインが今も生きているか。
+local function orchestrator_alive(deps, ws)
+  local oid = deps.managed.read_orchestrator(deps.opts.orchestrator_file, ws)
   return oid ~= nil and wezterm.mux.get_pane(oid) ~= nil
 end
 
--- supervise オーケストレーターを最左タブで起動し、その pane_id を記録する。
+-- ワークスペース ws 用の supervise オーケストレーターを最左タブで起動し、その pane_id を記録する。
 -- claude が終了するとログインシェルも終わりペインが閉じる (skill 側の自己終了と合わせ自動クローズ)。
-local function launch_orchestrator(window, pane, deps)
+-- WEZTERM_AGENT_WORKSPACE を渡し、MCP (get_agents/wait_for_event) がこのワークスペースの監督集合だけを読む。
+-- フォーカスは利用者の元タブへ戻し、司令塔から押しても画面を奪わない (タブ色で定位置を見分けられる)。
+local function launch_orchestrator(window, pane, deps, ws)
   local opts = deps.opts
   local shell = os.getenv("SHELL") or "/bin/sh"
   local cwd = deps.workspace and deps.workspace.get_cwd_path(pane) or nil
+  local orig_tab = window:active_tab()
   -- build_command は orchestrator_agent が未知だと error する。spawn と一緒に pcall で隔離し、
   -- 失敗が action_callback の外へ伝播して無反応になるのを防ぐ (誤値は apply() で起動時に通知済み)。
   local ok, new_pane = pcall(function()
@@ -114,22 +122,23 @@ local function launch_orchestrator(window, pane, deps)
     local _, p = window:mux_window():spawn_tab({
       args = { shell, "-lc", cmd },
       cwd = cwd,
-      set_environment_variables = { WEZTERM_AGENT_STATUS_DIR = opts.status_dir },
+      set_environment_variables = { WEZTERM_AGENT_STATUS_DIR = opts.status_dir, WEZTERM_AGENT_WORKSPACE = ws },
     })
     return p
   end)
   if not ok or not new_pane then return end
-  deps.managed.write_orchestrator(opts.orchestrator_file, new_pane:pane_id())
-  -- 最左へ移動してフォーカス (人間がオーケストレーターを見ておけるように)。
+  deps.managed.write_orchestrator(opts.orchestrator_file, ws, new_pane:pane_id())
+  -- 最左へ寄せて定位置にしつつ、フォーカスは元タブへ戻す (spawn_tab は新タブを前面化するため明示的に戻す)。
   pcall(function()
-    new_pane:activate()
     window:perform_action(act.MoveTab(0), pane)
+    if orig_tab then orig_tab:activate() end
   end)
 end
 
 function M.open(window, pane, deps)
   local L = deps.opts.labels
-  local rows = M.collect_rows(deps)
+  local ws = window:active_workspace()
+  local rows = M.collect_rows(deps, ws)
   if #rows == 0 then
     ui.toast(window, L.cc_empty)
     return
@@ -160,14 +169,11 @@ function M.open(window, pane, deps)
         if not id or id:match("^_sep_") then return end
         local pid = tonumber(id:match("^pane:(%d+)$"))
         if not pid then return end
-        deps.managed.toggle(deps.opts.managed_file, pid)
+        deps.managed.toggle(deps.opts.managed_file, ws, pid)
         -- 監督対象が非空になり、まだオーケストレーターが居なければ起動する (手動クローズ後も次トグルで復活)。
-        local nonempty = next(deps.managed.read(deps.opts.managed_file)) ~= nil
-        if nonempty and deps.opts.auto_orchestrator and not orchestrator_alive(deps) then
-          launch_orchestrator(iw, ip, deps)
-          return -- 起動時はオーケストレーターを見せ、コンソールは閉じる
-        end
-        -- 既に稼働中 or 空: その場で続けて管理できるよう再オープン。
+        -- 背景起動でフォーカスは奪わないので、そのまま司令塔を再オープンして続けて管理できる。
+        local nonempty = next(deps.managed.read(deps.opts.managed_file, ws)) ~= nil
+        if nonempty and deps.opts.auto_orchestrator and not orchestrator_alive(deps, ws) then launch_orchestrator(iw, ip, deps, ws) end
         M.open(iw, ip, deps)
       end),
     }),

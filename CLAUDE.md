@@ -149,6 +149,8 @@ claude mcp add -s user -e WEZTERM_MCP_AGENT_CLAUDE="claude --dangerously-skip-pe
 
 `get_agents` は監督集合 (司令塔コンソール CMD+SHIFT+M で人間がトグル) とライブ状態を結合して返す。`wait_for_event` は監督ペインの状態変化／監督集合の変化までブロックし差分を返す (オーケストレーターの監視ループ用)。状態ファイルは `WEZTERM_UNIX_SOCKET` 由来の gui_pid 名前空間配下を読む (フック・Lua と同一規則)。
 
+**監督はワークスペース単位**: 司令塔は現在のワークスペースのペインだけを対象にトグルし、ワークスペースごとに独立した監督集合 (`managed.json` を `{"<ws>":[pane_id,...]}` でキー化) と専用オーケストレーター (`orchestrator.json` を `{"<ws>":pane_id}` でキー化、タブを専用色で表示) を持つ。プラグインはオーケストレーター起動時に `WEZTERM_AGENT_WORKSPACE` を渡し、MCP は自ワークスペースの集合だけを読む (空のときは全ワークスペースの和集合＝手動セットアップ向けフォールバック)。
+
 ## エージェントの追加方法
 
 1. `plugin/service/agents/<id>.lua` を作成。`plugin/service/agent.lua` で定義されたインターフェースを実装する (detect, state, session_id, spawn_args 等)。検出は JSON 状態ファイルの `data.agent == "<id>"` で判定。ファイルを置けば `init.lua` が `service/agents/*.lua` を走査して候補・検証・登録に自動で乗せる (手動の登録リストは無い)。

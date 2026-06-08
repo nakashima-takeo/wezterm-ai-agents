@@ -29,21 +29,35 @@ func TestNsDir(t *testing.T) {
 
 func TestReadManagedSet(t *testing.T) {
 	dir := t.TempDir()
-	if got := readManagedSet(dir); len(got) != 0 {
+	if got := readManagedSet(dir, "proj"); len(got) != 0 {
 		t.Errorf("missing file should be empty, got %v", got)
 	}
 
-	if err := os.WriteFile(filepath.Join(dir, "managed.json"), []byte(`{"managed":[3,6,9]}`), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "managed.json"),
+		[]byte(`{"proj":[3,6,9],"other":[12]}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	got := readManagedSet(dir)
+
+	// Workspace-scoped read sees only its own panes.
+	got := readManagedSet(dir, "proj")
 	for _, id := range []int{3, 6, 9} {
 		if !got[id] {
-			t.Errorf("pane %d should be managed", id)
+			t.Errorf("pane %d should be managed in proj", id)
 		}
+	}
+	if got[12] {
+		t.Errorf("pane 12 (other ws) should not leak into proj")
 	}
 	if got[4] {
 		t.Errorf("pane 4 should not be managed")
+	}
+
+	// Empty workspace (manual setup / legacy) reads the union of all workspaces.
+	union := readManagedSet(dir, "")
+	for _, id := range []int{3, 6, 9, 12} {
+		if !union[id] {
+			t.Errorf("pane %d should be in the union read", id)
+		}
 	}
 }
 
