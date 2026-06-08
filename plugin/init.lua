@@ -130,25 +130,6 @@ local M = {
   managed = nil,
 }
 
--- install_hooks.sh の実行結果 (ran=終了コード0か, stdout=結果行) から、
--- ユーザーに知らせるべき失敗文言を返す (知らせる必要が無ければ nil)。原因を推測せず、
--- sh が返した結果コードを原因別に解釈する。symlink/unknown スキップや成功は通知しない。
-local function install_hooks_diagnostic(ran, stdout)
-  stdout = stdout or ""
-  -- ユーザーが体感する機能名 (タブ等の状態表示) で、原因と次の一手を示す。内部用語と推測は使わない。
-  local headline = "エージェントの状態表示を有効化できませんでした。"
-  if stdout:find("jq-missing", 1, true) then return headline .. "jq を入れて WezTerm を再起動してください" end
-  -- 既存設定が不正な JSON で触れなかったエージェントを集める (握りつぶさず id 付きで知らせる)。
-  local broken = {}
-  for id in stdout:gmatch("skip%-invalid%-json%s+(%S+)") do
-    broken[#broken + 1] = id
-  end
-  if #broken > 0 then return headline .. "設定ファイルが壊れています: " .. table.concat(broken, ", ") end
-  if not ran then return headline .. "手動設定は README を参照してください" end
-  return nil
-end
-M._install_hooks_diagnostic = install_hooks_diagnostic
-
 -- ============== Defaults ==============
 
 local default_opts = {
@@ -208,6 +189,8 @@ local default_opts = {
   install_ui_tab_title = true,
   install_ui_status = true,
   install_keybinds = true,
+  -- 検出済み各エージェントへ agent-plugin (状態追跡フック + MCP + supervise skill) を起動時に
+  -- 自動導入する (各社プラグイン CLI 経由・冪等)。false で自動導入を止め手動導入に任せる。
   install_hooks = true,
   -- MCP サーバーバイナリを起動時にプロビジョンする (Release から DL、無ければ go build フォールバック)。
   install_mcp = true,
@@ -317,25 +300,16 @@ function M.apply(config, user_opts)
     -- 補助機能なので pcall で隔離し、万一の失敗 (run_child_process が bash を spawn できない等) が
     -- 後段の update_all を巻き込まないようにする (直前の cleanup_dead_namespaces と同じ防御方針)。
     if opts.install_hooks then
-      local hook_ok, hook_err = pcall(function()
-        local cmd = { "bash", M.hooks_dir .. "/install_hooks.sh", M.hooks_dir }
+      -- 検出済み各エージェントへ agent-plugin を導入し状態追跡を有効化する。他社の設定ファイルを
+      -- 直接書き換えず各社のプラグイン CLI に委譲する (境界を尊重)。背景実行で gui-startup を
+      -- ブロックしない (各社 CLI の spawn コストを避ける)。install-if-absent で冪等。
+      pcall(function()
+        local cmd = { "bash", M.hooks_dir .. "/install_plugins.sh", plugin_dir }
         for _, impl in ipairs(agent.all()) do
           cmd[#cmd + 1] = impl.id
         end
-        local ran, stdout = wezterm.run_child_process(cmd)
-        -- 他プロダクトの設定ファイルを実際に書き換えた (applied) ものは足跡をログに残す (透明性)。
-        -- unchanged/skip は書き込みなしなので出さない。ログ止まりでタブは生やさない (ノイズ回避)。
-        local applied = {}
-        for id in (stdout or ""):gmatch("applied (%S+)") do
-          applied[#applied + 1] = id
-        end
-        if #applied > 0 then
-          wezterm.log_info("[ai-agents] install_hooks: 設定にフックを書き込みました: " .. table.concat(applied, ", "))
-        end
-        local msg = install_hooks_diagnostic(ran, stdout)
-        if msg then diagnostics.report("install_hooks", msg) end
+        wezterm.background_child_process(cmd)
       end)
-      if not hook_ok then wezterm.log_warn("[ai-agents] install_hooks failed: " .. tostring(hook_err)) end
     end
     -- MCP サーバーバイナリを共有パス ($XDG_STATE_HOME/wezterm-ai-agents/bin) に用意する。
     -- Release から DL、無ければ go build フォールバック。背景実行で UI を止めない。

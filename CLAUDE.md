@@ -65,9 +65,9 @@ plugin/
 
 **主要パターン:**
 - エージェント状態は hooks が pane ごとに JSON ファイルを書き込む push 方式: `$XDG_STATE_HOME/wezterm-ai-agents/<gui_pid>/wezterm-agent-<pane_id>` (GUI プロセス PID 名前空間配下。フォールバック `~/.local/state`)
-- `hooks/agent_status.sh` が書き込み側 (全エージェント共通)。Lua 側は `wezterm.json_parse()` で読み取り
-- 登録するエージェントは `enabled_agents` 既定 nil のとき `agent.detect_installed` が各 command 先頭バイナリを `command -v` で検出し、PATH 上に在るものだけに絞る (未インストールツールを選択 UI や install_hooks の対象にしない)。検出不能(シェル失敗)は全登録へフォールバック、0件は登録せず diagnostics で通知。`enabled_agents` 明示時は検出せずそのまま尊重 (エスケープハッチ)
-- 起動時に `hooks/install_hooks.sh` が登録済みエージェントの設定ファイルへ agent_status.sh フックを冪等マージする (既定 ON `opts.install_hooks`、要 jq。symlink/不正 JSON はスキップ、command 単位で除去→再追加)
+- `agent-plugin/hooks/agent_status.sh` が書き込み側 (全エージェント共通・各社プラグインに同梱)。Lua 側は `wezterm.json_parse()` で読み取り
+- 登録するエージェントは `enabled_agents` 既定 nil のとき `agent.detect_installed` が各 command 先頭バイナリを `command -v` で検出し、PATH 上に在るものだけに絞る (未インストールツールをプラグイン自動導入や選択 UI の対象にしない)。検出不能(シェル失敗)は全登録へフォールバック、0件は登録せず diagnostics で通知。`enabled_agents` 明示時は検出せずそのまま尊重 (エスケープハッチ)
+- 起動時に `hooks/install_plugins.sh` が検出済み各エージェントへ agent-plugin (状態追跡フック+MCP+skill) を各社プラグイン CLI で導入する (既定 ON `opts.install_hooks`、背景実行・install-if-absent で冪等。他社の設定ファイルを直接書き換えない。codex はフック信頼を一度 `/hooks` で要承認)
 - ユーザーに知らせるべき失敗は `service/diagnostics.lua` に report し、update-status でアクティブペインへ端末出力で通知する (`wezterm.log_*` はデバッグオーバーレイ止まりで届かないため)
 - PID 名前空間は書き込み側 `WEZTERM_UNIX_SOCKET` の `gui-sock-<pid>` と読み取り側 `wezterm.procinfo.pid()` が同一 GUI プロセス PID に合意する前提 (mux 内蔵の既定構成のみ。分離 mux 構成は非対応)
 - JSON 形式: `{"agent":"<id>","state":"<state>","ts":<unix>,"session_id":"<sid>"}`
@@ -144,5 +144,5 @@ claude mcp add -s user -e WEZTERM_MCP_AGENT_CLAUDE="claude --dangerously-skip-pe
 ## エージェントの追加方法
 
 1. `plugin/service/agents/<id>.lua` を作成。`plugin/service/agent.lua` で定義されたインターフェースを実装する (detect, state, session_id, spawn_args 等)。検出は JSON 状態ファイルの `data.agent == "<id>"` で判定。ファイルを置けば `init.lua` が `service/agents/*.lua` を走査して候補・検証・登録に自動で乗せる (手動の登録リストは無い)。
-2. エージェントの hooks から `hooks/agent_status.sh <id> <state>` を呼ぶ (または同じ JSON 形式を直接書き込む)。
-3. `hooks/install_hooks.sh` の `case "$id"` にエージェント→設定ファイルのパスと登録イベントの spec を追記する (起動時自動設定の対象に含めるため。ここを忘れると自動設定だけ漏れる)。設定ファイル構造が Claude/Codex/Gemini と異なる場合は style 分岐も要追加。
+2. エージェントの hooks から `agent-plugin/hooks/agent_status.sh <id> <state>` を呼ぶ (または同じ JSON 形式を直接書き込む)。
+3. `agent-plugin/hooks/<id>-hooks.json` に event→state を定義し各マニフェストの `hooks` フィールドで参照する (gemini は固定 `hooks/hooks.json` を自動探索)。`hooks/install_plugins.sh` の `case "$id"` に各社の install コマンドを追記する (起動時自動導入の対象に含めるため)。

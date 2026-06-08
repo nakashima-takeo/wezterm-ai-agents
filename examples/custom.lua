@@ -79,9 +79,9 @@ You are a cautious supervisor.
   -- The binary + flags used to launch it (e.g. "codex --yolo" / "gemini --approval-mode=yolo"):
   -- orchestrator_command = "claude --dangerously-skip-permissions",
 
-  -- Auto-install agent state-tracking hooks into each agent's config on startup
-  -- (default: true; requires `jq`). Symlinked configs (e.g. dotfiles) are skipped.
-  -- Set false to manage hooks yourself (see README "手動でのHooks設定").
+  -- Auto-install agent-plugin (state-tracking hooks + MCP + supervise skill) into each detected
+  -- agent on startup, via each vendor's plugin CLI (idempotent; no jq, no config-file surgery).
+  -- codex needs a one-time `/hooks` trust. Set false to install plugins yourself (see README).
   install_hooks = false,
 })
 

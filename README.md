@@ -77,98 +77,39 @@ local ai = dofile(plugin_dir .. "/plugin/init.lua")
 ai.apply(config, { plugin_dir = plugin_dir })
 ```
 
-## Hooks設定
+## エージェント状態の検知 (Hooks)
 
-エージェント状態の検知には、各エージェントの設定ファイルに同梱スクリプト `hooks/agent_status.sh` を登録します。**既定 (`install_hooks = true`) では、WezTerm 起動時に各エージェントの設定ファイルへ自動でマージされます**（`jq` が必要）。通常は何もする必要はありません。
+エージェントの状態 (idle/working/waiting/done) は、各エージェントに導入した **agent-plugin** の同梱フックが JSON 状態ファイルに書き込み、WezTerm プラグインが読み取って表示します。
 
-自動設定の挙動:
+**既定 (`install_hooks = true`) では、WezTerm 起動時に検出した各エージェントへ agent-plugin を自動導入します**（各社のプラグイン CLI 経由・冪等。**他社の設定ファイルを直接書き換えません**）。通常は何もする必要はありません。
 
-- 既存の設定は壊しません。自分のエントリだけを冪等に追加・更新し、他のフックや設定キーは保持します。書き込みは一時ファイル経由のアトミック置換です。
-- 設定ファイルが **symlink**（dotfiles 管理など）の場合はスキップします。その場合は後述の手動設定を使ってください。
-- `jq` が無い・既存ファイルが不正な JSON の場合はスキップします。`jq` が無く自動設定できなかった場合は起動時に通知します。
-- `install_hooks = false` で自動設定を無効化できます。
+- claude / codex / gemini: `claude plugin install` / `codex plugin add` / `gemini extensions install` をバックグラウンドで実行 (install-if-absent)。`jq` は不要。
+- **codex のみ一手間**: codex はプラグイン同梱フックを「信頼」するまで発火しません。導入後に codex で **`/hooks` を一度実行してフックを信頼**してください (一度きり)。
+- cursor: プラグイン CLI を持たない二級市民のため自動導入の対象外 (下記の手動設定)。
+- `install_hooks = false` で自動導入を無効化できます。
 
 スクリプトは状態をJSONとして `$XDG_STATE_HOME/wezterm-ai-agents/<gui_pid>/wezterm-agent-<pane_id>`（`$XDG_STATE_HOME` 未設定時は `~/.local/state/wezterm-ai-agents`）に書き込み、プラグインが定期的に読み取ります。`<gui_pid>` は GUI プロセスごとの名前空間で、複数の WezTerm を同時起動しても状態が混ざらないようにするものです。
 
 > 状態検知は GUI プロセスが mux を内蔵する既定構成を前提とします。mux サーバを別プロセスで常駐させ `wezterm connect` で接続する分離構成・リモート多重化はサポート対象外です。
 
-## 手動でのHooks設定
+## 手動導入 / cursor
 
-symlink で管理している・`jq` が無い・`install_hooks = false` にしたなどで自動設定を使わない場合は、以下の手順で手動設定します。
+`install_hooks = false` にした、または手動で入れたい場合 (event→state マッピングの真実源は `agent-plugin/hooks/` の各 JSON):
 
-> **注**: 各エージェントの event→state マッピングの真実源は [`hooks/install_hooks.sh`](hooks/install_hooks.sh) の `spec` です。以下の手動設定例は二次情報のため、差異がある場合はスクリプトを優先してください。
+- **claude**: `/plugin marketplace add nakashima-takeo/wezterm-ai-agents` → `/plugin install wezterm-ai-agents@wezterm-ai-agents`
+- **codex**: `codex plugin marketplace add nakashima-takeo/wezterm-ai-agents` → `codex plugin add wezterm-ai-agents@wezterm-ai-agents` → codex で `/hooks` を実行して信頼
+- **gemini**: `gemini extensions install https://github.com/nakashima-takeo/wezterm-ai-agents`
 
-### hooks パスの確認
+### Cursor Agent (二級市民・手動)
 
-`ai.apply()` 実行時に hooks ディレクトリのパスがログに出力されます。
-WezTerm の Debug Overlay（デフォルト: `Ctrl+Shift+L`、macOS でも Cmd ではなく Ctrl）で確認してください。
-
-また、`ai.apply()` 後に `ai.hooks_dir` でパスを取得できます。
-
-プラグインの `agent_status.sh` を直接参照することで、プラグイン更新時にスクリプトも自動的に更新されます。
-
-> **注意**: スクリプトをコピーして使用すると、プラグイン更新時に修正が反映されません。`ai.hooks_dir` のパスを直接参照することを推奨します。
-
-### Claude Code
-
-`~/.claude/settings.json`（既存の hooks がある場合は配列に追加）:
-
-```json
-{
-  "hooks": {
-    "SessionStart":     [{ "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh claude idle" }] }],
-    "SessionEnd":       [{ "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh claude clear" }] }],
-    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh claude working" }] }],
-    "Stop":             [{ "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh claude done" }] }],
-    "PreToolUse":  [{ "matcher": "AskUserQuestion", "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh claude waiting" }] }],
-    "PostToolUse": [{ "matcher": "AskUserQuestion", "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh claude working" }] }]
-  }
-}
-```
-
-### Cursor Agent
-
-Cursorには細かいライフサイクルフックがないため、状態は常に `unknown` と表示されます。
-
-`~/.cursor/hooks.json`:
+Cursor はプラグイン CLI もライフサイクルフックも乏しいため自動導入の対象外です。状態を追跡したい場合は `~/.cursor/hooks.json` に同梱スクリプトを手動登録します (`<agent-plugin>` は導入済み agent-plugin のパス):
 
 ```json
 {
   "version": 1,
   "hooks": {
-    "sessionStart": [{ "command": "<hooks_dir>/agent_status.sh cursor unknown" }],
-    "sessionEnd": [{ "command": "<hooks_dir>/agent_status.sh cursor clear" }]
-  }
-}
-```
-
-### Codex
-
-`~/.codex/hooks.json`:
-
-```json
-{
-  "hooks": {
-    "SessionStart":     [{ "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh codex idle" }] }],
-    "UserPromptSubmit":  [{ "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh codex working" }] }],
-    "PermissionRequest": [{ "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh codex waiting" }] }],
-    "Stop":              [{ "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh codex done" }] }]
-  }
-}
-```
-
-### Gemini
-
-`~/.gemini/settings.json`:
-
-```json
-{
-  "hooks": {
-    "SessionStart": [{ "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh gemini idle" }] }],
-    "SessionEnd":   [{ "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh gemini clear" }] }],
-    "BeforeAgent":  [{ "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh gemini working" }] }],
-    "Notification": [{ "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh gemini waiting" }] }],
-    "AfterAgent":   [{ "hooks": [{ "type": "command", "command": "<hooks_dir>/agent_status.sh gemini done" }] }]
+    "sessionStart": [{ "command": "<agent-plugin>/hooks/agent_status.sh cursor unknown" }],
+    "sessionEnd": [{ "command": "<agent-plugin>/hooks/agent_status.sh cursor clear" }]
   }
 }
 ```

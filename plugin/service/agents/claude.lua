@@ -2,7 +2,7 @@
 -- State comes from the unified JSON state file:
 --   <status_dir>/<gui_pid>/wezterm-agent-<pane_id>
 --   {"agent":"claude","state":"...","ts":...,"session_id":"..."}
--- Written by hooks/agent_status.sh, invoked from ~/.claude/settings.json hooks.
+-- Written by agent-plugin/hooks/agent_status.sh, invoked from agent-plugin の同梱フック (claude-hooks.json)。
 
 local M = {}
 

@@ -2,7 +2,7 @@ package.path = package.path .. ";test/?.lua"
 local H = require("helper")
 local test = H.test
 
-local hook_path = H.plugin_dir .. "/hooks/agent_status.sh"
+local hook_path = H.plugin_dir .. "/agent-plugin/hooks/agent_status.sh"
 
 -- フックは WEZTERM_UNIX_SOCKET(=…/gui-sock-<pid>) 末尾の PID で名前空間化する。
 -- テストは固定 socket を渡して決定的にし、その名前空間配下を検証する。
