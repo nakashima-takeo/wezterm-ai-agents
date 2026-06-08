@@ -40,8 +40,11 @@ case "$STATUS" in
   *)
     mkdir -p "$STATUS_DIR"
     SID=$(echo "$INPUT" | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
+    # 近接イベント (working→done 等) でフックが並行発火するため、tmp は PID で一意化する。
+    # 固定名だと一方の mv がもう一方の tmp を先に消し "No such file" で書き込みが落ちる。
+    tmp="$STATE_FILE.tmp.$$"
     printf '{"agent":"%s","state":"%s","ts":%d,"session_id":"%s"}\n' \
-      "$AGENT" "$STATUS" "$(date +%s)" "${SID:-}" > "$STATE_FILE.tmp" \
-      && mv "$STATE_FILE.tmp" "$STATE_FILE"
+      "$AGENT" "$STATUS" "$(date +%s)" "${SID:-}" > "$tmp" \
+      && mv "$tmp" "$STATE_FILE"
     ;;
 esac
