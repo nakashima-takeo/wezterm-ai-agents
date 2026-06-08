@@ -27,9 +27,15 @@ SRC="${3:-}"
 
 BIN_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/wezterm-ai-agents/bin"
 BIN="$BIN_DIR/wezterm-mcp"
+# 調達済みバイナリのバージョンを併置で記録する。固定パスだけだとプラグイン更新後も古い
+# バイナリを使い続けるため、要求 VERSION と一致する時だけキャッシュヒットとする。
+VERSION_FILE="$BIN.version"
 
-# Already provisioned.
-[ -x "$BIN" ] && { echo "$BIN"; exit 0; }
+# Already provisioned at the requested version.
+if [ -x "$BIN" ] && [ "$(cat "$VERSION_FILE" 2>/dev/null)" = "$VERSION" ]; then
+  echo "$BIN"
+  exit 0
+fi
 
 mkdir -p "$BIN_DIR"
 
@@ -55,7 +61,7 @@ if [ -n "$goos" ] && [ -n "$goarch" ] && command -v curl >/dev/null 2>&1; then
   fi
   tmp="$BIN.tmp.$$"
   if curl -fsSL "$url" -o "$tmp" 2>/dev/null && [ -s "$tmp" ]; then
-    chmod +x "$tmp" && mv "$tmp" "$BIN" && { echo "$BIN"; exit 0; }
+    chmod +x "$tmp" && mv "$tmp" "$BIN" && echo "$VERSION" > "$VERSION_FILE" && { echo "$BIN"; exit 0; }
   fi
   rm -f "$tmp"
 fi
@@ -63,6 +69,7 @@ fi
 # (3) Dev fallback: build from source.
 if [ -n "$SRC" ] && [ -d "$SRC" ] && command -v go >/dev/null 2>&1; then
   if (cd "$SRC" && go build -o "$BIN" .) >/dev/null 2>&1; then
+    echo "$VERSION" > "$VERSION_FILE"
     echo "$BIN"
     exit 0
   fi
