@@ -94,7 +94,7 @@ ai.apply(config, { plugin_dir = plugin_dir })
 
 ## 手動導入 / cursor
 
-`install_hooks = false` にした、または手動で入れたい場合 (event→state マッピングの真実源は `agent-plugin/hooks/` の各 JSON):
+`install_hooks = false` にした、または手動で入れたい場合 (event→state マッピングの真実源は claude/codex が `agent-plugin/hooks/*-hooks.json`、gemini が repo ルートの `hooks/hooks.json`):
 
 - **claude**: `/plugin marketplace add nakashima-takeo/wezterm-ai-agents` → `/plugin install wezterm-ai-agents@wezterm-ai-agents`
 - **codex**: `codex plugin marketplace add nakashima-takeo/wezterm-ai-agents` → `codex plugin add wezterm-ai-agents@wezterm-ai-agents` → codex で `/hooks` を実行して信頼

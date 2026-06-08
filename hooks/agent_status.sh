@@ -1,0 +1,1 @@
+../agent-plugin/hooks/agent_status.sh

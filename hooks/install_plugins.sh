@@ -25,7 +25,6 @@ set -u
 DIR="${1:?plugin_dir required}"
 shift
 NAME="wezterm-ai-agents"
-PKG="$DIR/agent-plugin"
 
 for id in "$@"; do
   case "$id" in
@@ -54,7 +53,7 @@ for id in "$@"; do
       if gemini extensions list 2>&1 | grep -q "$NAME"; then
         gemini extensions update "$NAME" >/dev/null 2>&1
         echo "unchanged gemini"
-      elif gemini extensions install "$PKG" --consent >/dev/null 2>&1; then
+      elif gemini extensions install "$DIR" --consent >/dev/null 2>&1; then
         echo "installed gemini"
       else
         echo "error gemini"
