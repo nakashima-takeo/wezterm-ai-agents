@@ -29,7 +29,7 @@ local function detect_plugin_dir(user_dir)
   error("wezterm-ai-agents: plugin_dir not detected. Pass opts.plugin_dir or load via wezterm.plugin.require.")
 end
 
-local workspace, worktree, layout, selector, agent, ui, builtin_labels, builtin_icons, editor, links, diagnostics, managed
+local workspace, worktree, layout, selector, agent, ui, builtin_labels, builtin_icons, editor, links, diagnostics, manager
 
 -- 既知エージェント id を service/agents/*.lua のファイル名から導出する (手動リストを持たない)。
 -- ファイルを 1 枚足せば候補・検証・登録すべてに自動で乗る。glob はソート済みを返す (= 表示順は id 昇順)。
@@ -65,12 +65,12 @@ local function load_modules(plugin_dir, opts)
   workspace = load("state/workspace/init")
   workspace.setup(load("state/workspace/session"))
   layout = load("state/layout")
-  managed = load("state/managed")
+  manager = load("state/manager")
 
   -- ui/ 上位層: UI・オーケストレーション (deps 経由で下位/中位を呼ぶ)
   ui = load("ui/ui")
   selector = load("ui/selector/init")
-  selector.setup(load("ui/selector/workspace"), load("ui/selector/worktree"), load("ui/selector/ui"), load("ui/selector/command_center"))
+  selector.setup(load("ui/selector/workspace"), load("ui/selector/worktree"), load("ui/selector/ui"), load("ui/selector/manager"))
 
   -- 登録対象 id を決める。enabled_agents を明示した場合はそれを尊重する (自動検出のエスケープハッチ)。
   -- 未指定 (既定) は各エージェントの command 先頭バイナリが PATH 上に在るものだけを検出して登録し、
@@ -127,7 +127,7 @@ local M = {
   selector = nil,
   agent = nil,
   ui = nil,
-  managed = nil,
+  manager = nil,
 }
 
 -- ============== Defaults ==============
@@ -149,16 +149,13 @@ local default_opts = {
   nerd_font = true,
   font = nil, -- primary フォント (family 文字列 or { family=..., 属性 })。nil = JetBrains Mono。日本語フォールバックは自動付加
   status_dir = default_status_dir(),
-  -- 司令塔 (CMD+SHIFT+M) は現在のワークスペースだけを対象に監督対象をトグルする。空→非空になった時、
-  -- そのワークスペース用の supervise オーケストレーターを最左タブに自動起動する (フォーカスは奪わない)。
-  auto_orchestrator = true,
-  -- オーケストレーターに使うエージェント。supervise の決定的起動の渡し方が各社で異なるため分岐に使う。
-  orchestrator_agent = "claude", -- "claude" | "codex" | "gemini"
-  -- オーケストレーターを起動する本体＋フラグ (supervise 起動トークンはプラグインが付けるので不要)。
-  -- orchestrator_agent を変えたらこちらも対応する本体に変える (例: codex なら "codex --yolo")。
-  orchestrator_command = "claude --dangerously-skip-permissions",
-  -- orchestrator_system_prompt は既定なし (未設定)。監督エージェントに固定システムプロンプトを
-  -- 渡したい時だけ opts に文字列を設定する (--append-system-prompt として付与。examples/custom.lua 参照)。
+  -- 受付マネージャーに使うエージェント。manager の決定的起動の渡し方が各社で異なるため分岐に使う。
+  manager_agent = "claude", -- "claude" | "codex" | "gemini"
+  -- マネージャーを起動する本体＋フラグ (manager 起動トークンはプラグインが付けるので不要)。
+  -- manager_agent を変えたらこちらも対応する本体に変える (例: codex なら "codex --yolo")。
+  manager_command = "claude --dangerously-skip-permissions",
+  -- manager_system_prompt は既定なし (未設定)。マネージャーに固定システムプロンプトを渡したい時だけ
+  -- opts に文字列を設定する (--append-system-prompt として付与。examples/custom.lua 参照)。
   enabled_agents = nil, -- nil = PATH 上にバイナリが在るエージェントを自動検出して登録; or { "claude" } で明示固定
   default_agent = nil, -- nil = first registered; or "claude" to set default agent for Cmd+Shift+C
   default_editor = nil, -- nil = auto-detect (code/cursor/windsurf/zed/subl); or "/usr/local/bin/cursor" etc.
@@ -177,7 +174,7 @@ local default_opts = {
       accent_fg = "#b4befe",
       inactive_bg = "#11111b",
       inactive_fg = "#585b70",
-      orchestrator_fg = "#f9e2af", -- 監督オーケストレーターのタブを一目で見分ける色 (Catppuccin yellow)
+      manager_fg = "#f9e2af", -- 受付マネージャーのタブを一目で見分ける色 (Catppuccin yellow)
     },
     right_status = {
       fg = "#a6adc8",
@@ -191,7 +188,7 @@ local default_opts = {
   install_ui_tab_title = true,
   install_ui_status = true,
   install_keybinds = true,
-  -- 検出済み各エージェントへ agent-plugin (状態追跡フック + MCP + supervise skill) を起動時に
+  -- 検出済み各エージェントへ agent-plugin (状態追跡フック + MCP + manager skill) を起動時に
   -- 自動導入する (各社プラグイン CLI 経由・冪等)。false で自動導入を止め手動導入に任せる。
   install_hooks = true,
   -- MCP サーバーバイナリを起動時にプロビジョンする (Release から DL、無ければ go build フォールバック)。
@@ -265,12 +262,11 @@ function M.apply(config, user_opts)
 
   local plugin_dir = detect_plugin_dir(opts.plugin_dir)
   load_modules(plugin_dir, opts)
-  M.workspace, M.worktree, M.layout, M.selector, M.agent, M.ui, M.managed = workspace, worktree, layout, selector, agent, ui, managed
+  M.workspace, M.worktree, M.layout, M.selector, M.agent, M.ui, M.manager = workspace, worktree, layout, selector, agent, ui, manager
 
-  -- 監督集合ファイルと、起動中オーケストレーターの pane_id ファイル。状態ファイルと同じ GUI pid
-  -- 名前空間配下に置き、cleanup_dead_namespaces で一緒に回収される。
-  opts.managed_file = agent.ns_dir(opts.status_dir) .. "/managed.json"
-  opts.orchestrator_file = agent.ns_dir(opts.status_dir) .. "/orchestrator.json"
+  -- ワークスペースごとの manager ペイン id ファイル。状態ファイルと同じ GUI pid 名前空間配下に
+  -- 置き、cleanup_dead_namespaces で一緒に回収される。
+  opts.manager_file = agent.ns_dir(opts.status_dir) .. "/manager.json"
 
   if opts.default_agent and not agent.get(opts.default_agent) then
     wezterm.log_error(
@@ -278,12 +274,10 @@ function M.apply(config, user_opts)
     )
   end
 
-  -- orchestrator_agent は build_command が claude/codex/gemini のみ受理する。誤値は司令塔トグル時まで
-  -- 顕在化せず managed.json 書き換え後に失敗するため、default_agent と同様に起動時へ前倒しで通知する。
-  if opts.auto_orchestrator and not ({ claude = true, codex = true, gemini = true })[opts.orchestrator_agent] then
-    wezterm.log_error(
-      "wezterm-ai-agents: orchestrator_agent '" .. tostring(opts.orchestrator_agent) .. "' must be one of claude/codex/gemini."
-    )
+  -- manager_agent は build_command が claude/codex/gemini のみ受理する。誤値は召喚時まで顕在化せず
+  -- 失敗するため、default_agent と同様に起動時へ前倒しで通知する。
+  if not ({ claude = true, codex = true, gemini = true })[opts.manager_agent] then
+    wezterm.log_error("wezterm-ai-agents: manager_agent '" .. tostring(opts.manager_agent) .. "' must be one of claude/codex/gemini.")
   end
 
   local icon_set = opts.nerd_font and builtin_icons.nerd or builtin_icons.unicode
@@ -363,7 +357,7 @@ function M.apply(config, user_opts)
     agent = agent,
     ui = ui,
     editor = editor,
-    managed = managed,
+    manager = manager,
     opts = opts,
   }
   M.deps = deps
@@ -471,10 +465,7 @@ function M.apply(config, user_opts)
         last_sync_tick = now
         pcall(workspace.sync_all, opts.workspace, agent, layout, opts)
         -- 生存 pane に対応しない孤立状態ファイルを掃除する (reaping を失った分を継続的に解消)。
-        -- 同じ生存 pane 集合で監督集合からも閉じたペインを剪定する。これがないと閉じたペインが
-        -- managed.json に残り続け、オーケストレーターの「監督集合が空なら終了」が成立しない。
-        local ok, live = pcall(agent.sweep_orphan_files, opts)
-        if ok and live then pcall(managed.prune, opts.managed_file, live) end
+        pcall(agent.sweep_orphan_files, opts)
       end
     end)
   end

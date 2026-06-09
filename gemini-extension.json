@@ -1,7 +1,7 @@
 {
   "name": "wezterm-ai-agents",
   "version": "0.1.0",
-  "description": "WezTerm のワークスペース・worktree・並列エージェントを操作し、監督オーケストレーターを動かす",
+  "description": "WezTerm のワークスペース・worktree・並列エージェントを操作し、受付マネージャーで委譲・管理する",
   "mcpServers": {
     "wezterm": {
       "command": "sh",

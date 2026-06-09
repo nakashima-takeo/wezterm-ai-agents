@@ -5,7 +5,7 @@
     {
       "name": "wezterm-ai-agents",
       "source": "./agent-plugin",
-      "description": "WezTerm のワークスペース/worktree/並列エージェント操作と監督オーケストレーターを提供する MCP プラグイン"
+      "description": "WezTerm のワークスペース/worktree/並列エージェント操作と受付マネージャー（委譲・管理）を提供する MCP プラグイン"
     }
   ]
 }

@@ -2,7 +2,7 @@
 # wezterm-ai-agents: 検出済み各エージェントへ agent-plugin を導入する。
 #
 # 他社の設定ファイルを直接書き換えず (jq 手術をやめ)、各社のプラグイン CLI に委譲して
-# 境界を尊重する。agent-plugin は状態追跡フック + MCP サーバー + supervise skill を束ねた配布物で、
+# 境界を尊重する。agent-plugin は状態追跡フック + MCP サーバー + manager skill を束ねた配布物で、
 # これを install-if-absent で冪等に導入する。背景実行され出力は使われないため fail-safe に書く。
 #
 # Usage:

@@ -65,21 +65,20 @@ ai.apply(config, {
   -- How often (seconds) workspace state (tabs, agents, layouts) is synced to JSON.
   session_sync_interval = 10,
 
-  -- Supervisor orchestrator: auto-launched when you put an agent under supervision
-  -- in the command center (CMD+SHIFT+M). It watches managed agents and only asks you
-  -- for uncertain/irreversible decisions. Set auto_orchestrator = false to disable.
-  -- A fixed system prompt for the supervisor (optional, multi-line OK):
-  orchestrator_system_prompt = [[
-You are a cautious supervisor.
+  -- Reception manager: summoned with CMD+SHIFT+M. You consult it; it triages your request and
+  -- delegates to agent tabs, and may manage panes (watch/unstick) at its own discretion.
+  -- A fixed system prompt for the manager (optional, multi-line OK):
+  manager_system_prompt = [[
+You are a cautious manager.
 - Always confirm with the human before irreversible/outward-facing actions (push, merge to main, deletes).
 ]],
-  -- Which agent runs the orchestrator (claude | codex | gemini). The supervise launch token
-  -- differs per agent and is added by the plugin; just match orchestrator_command to it.
-  -- orchestrator_agent = "claude",
+  -- Which agent runs the manager (claude | codex | gemini). The manager launch token
+  -- differs per agent and is added by the plugin; just match manager_command to it.
+  -- manager_agent = "claude",
   -- The binary + flags used to launch it (e.g. "codex --yolo" / "gemini --approval-mode=yolo"):
-  -- orchestrator_command = "claude --dangerously-skip-permissions",
+  -- manager_command = "claude --dangerously-skip-permissions",
 
-  -- Auto-install agent-plugin (state-tracking hooks + MCP + supervise skill) into each detected
+  -- Auto-install agent-plugin (state-tracking hooks + MCP + manager skill) into each detected
   -- agent on startup, via each vendor's plugin CLI (idempotent; no jq, no config-file surgery).
   -- codex needs a one-time `/hooks` trust. Set false to install plugins yourself (see README).
   install_hooks = false,

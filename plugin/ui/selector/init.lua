@@ -13,15 +13,14 @@ local M = {}
 
 M.pinned_windows = {}
 
-local sel_ws, sel_wt, sel_ui, sel_cc
+local sel_ws, sel_wt, sel_ui, sel_mgr
 
 -- plugin/init.lua から各サブモジュールを受け取り結線する。
--- 共有 UI ヘルパーを workspace/worktree/command_center の各 UI に注入し、maybe_prefetch を再エクスポートする。
-function M.setup(ws, wt, ui, command_center)
-  sel_ws, sel_wt, sel_ui, sel_cc = ws, wt, ui, command_center
+-- 共有 UI ヘルパーを workspace/worktree/manager の各 UI に注入し、maybe_prefetch を再エクスポートする。
+function M.setup(ws, wt, ui, manager)
+  sel_ws, sel_wt, sel_ui, sel_mgr = ws, wt, ui, manager
   ws.setup(ui)
   wt.setup(ui)
-  command_center.setup(ui)
   M.maybe_prefetch = wt.maybe_prefetch
 end
 
@@ -257,13 +256,13 @@ function M.build_keybinds(deps)
     action = wezterm.action_callback(function(window, pane) sel_ui.help_selector(window, pane, deps, help_items) end),
   }, { group = "help_group_window", desc = "help_help" })
 
-  -- Command center (toggle which agent panes the orchestrator supervises).
+  -- Manager (summon the workspace reception manager: triage a request and delegate to tabs).
   -- Placed after the whole window group so the help overlay does not split that group.
-  add("command_center", {
+  add("manager", {
     key = "M",
     mods = "CMD|SHIFT",
-    action = wezterm.action_callback(function(window, pane) sel_cc.open(window, pane, deps) end),
-  }, { group = "help_group_command_center", desc = "help_command_center", runnable = true })
+    action = wezterm.action_callback(function(window, pane) sel_mgr.summon(window, pane, deps) end),
+  }, { group = "help_group_manager", desc = "help_manager", runnable = true })
 
   -- ヘルプに表示しないキー (パススルー / ナビゲーション / 行編集)
   add("disable_quit", { key = "q", mods = "CMD", action = act.Nop }) -- CMD+Q 誤操作防止

@@ -1,10 +1,10 @@
 {
   "name": "wezterm-ai-agents",
-  "description": "WezTerm のワークスペース・worktree・並列エージェントを AI から操作し、監督オーケストレーターを動かす MCP プラグイン",
+  "description": "WezTerm のワークスペース・worktree・並列エージェントを AI から操作し、受付マネージャーで委譲・管理する MCP プラグイン",
   "version": "0.1.0",
   "author": { "name": "nakashima-takeo" },
   "repository": "https://github.com/nakashima-takeo/wezterm-ai-agents",
-  "keywords": ["wezterm", "mcp", "agents", "orchestrator"],
+  "keywords": ["wezterm", "mcp", "agents", "manager"],
   "mcpServers": "./.mcp.json",
   "skills": "./skills/",
   "hooks": "./hooks/claude-hooks.json"

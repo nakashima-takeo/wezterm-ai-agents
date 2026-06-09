@@ -70,12 +70,8 @@ local en = {
   help_prev_tab = "Previous tab",
   help_pin_toggle = "Always on top",
   help_help = "Show help",
-  help_group_command_center = "Command Center",
-  help_command_center = "Command center (toggle supervision)",
-  cc_title = "Command Center",
-  cc_empty = "No agents found.",
-  cc_supervised = "Supervised",
-  cc_unsupervised = "Not supervised",
+  help_group_manager = "Manager",
+  help_manager = "Summon workspace manager",
 }
 
 local ja = {
@@ -150,12 +146,8 @@ local ja = {
   help_prev_tab = "前のタブ",
   help_pin_toggle = "常に前面に固定",
   help_help = "ヘルプ",
-  help_group_command_center = "司令塔",
-  help_command_center = "司令塔 (監督 on/off)",
-  cc_title = "司令塔",
-  cc_empty = "エージェントが見つかりません。",
-  cc_supervised = "監督中",
-  cc_unsupervised = "未監督",
+  help_group_manager = "マネージャー",
+  help_manager = "マネージャー召喚",
 }
 
 return { en = en, ja = ja }

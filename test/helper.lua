@@ -51,7 +51,7 @@ function H.load_selector()
     H.load_mod("ui/selector/workspace"),
     H.load_mod("ui/selector/worktree"),
     H.load_mod("ui/selector/ui"),
-    H.load_mod("ui/selector/command_center")
+    H.load_mod("ui/selector/manager")
   )
   return selector
 end

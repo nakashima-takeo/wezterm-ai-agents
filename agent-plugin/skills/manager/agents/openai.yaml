@@ -1,0 +1,10 @@
+# Codex-specific skill config (read by the harness, not the model).
+# The manager must start in the manager role deterministically — the WezTerm plugin launches
+# codex with `$manager` — so disable implicit (description-match) invocation; the explicit
+# `$manager` invocation still works. This mirrors Claude's disable-model-invocation.
+interface:
+  display_name: "Manager"
+  short_description: "WezTerm のワークスペース受付マネージャー（委譲と必要時の管理）"
+  default_prompt: "Use $manager to triage my request and delegate it to agent tabs in WezTerm."
+policy:
+  allow_implicit_invocation: false

@@ -9,11 +9,7 @@ import (
 type Config struct {
 	WorkspacesFile string
 	StatusDir      string
-	// Workspace scopes the supervision registry (managed.json) to one workspace. Set from
-	// WEZTERM_AGENT_WORKSPACE, which the plugin passes when it spawns the orchestrator. Empty
-	// (manual setup / legacy) means read the union of all workspaces.
-	Workspace string
-	Agents    map[string]string
+	Agents         map[string]string
 }
 
 // defaultStatusDir matches the plugin (init.lua) and agent-plugin/hooks/agent_status.sh: the XDG state
@@ -43,9 +39,6 @@ func loadConfig() *Config {
 	}
 	if v := os.Getenv("WEZTERM_AGENT_STATUS_DIR"); v != "" {
 		cfg.StatusDir = v
-	}
-	if v := os.Getenv("WEZTERM_AGENT_WORKSPACE"); v != "" {
-		cfg.Workspace = v
 	}
 
 	for _, env := range os.Environ() {

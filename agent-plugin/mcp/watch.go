@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -16,7 +17,7 @@ import (
 
 // nsDir resolves the per-GUI-process namespace dir under the status base. It must agree with
 // the hook (WEZTERM_UNIX_SOCKET -> gui-sock-<pid>) and the Lua reader (procinfo.pid()) so the
-// orchestrator reads exactly the files the plugin writes. Falls back to the flat base when the
+// manager reads exactly the files the plugin writes. Falls back to the flat base when the
 // socket is absent or malformed (legacy / non-GUI spawn).
 func nsDir(cfg *Config) string {
 	sock := os.Getenv("WEZTERM_UNIX_SOCKET")
@@ -62,34 +63,8 @@ func readAgentStates(dir string) map[int]AgentStatus {
 	return out
 }
 
-// readManagedSet reads the supervision registry (managed.json: {"<ws>":[3,6,...], ...}) for one
-// workspace. An empty ws (manual setup / legacy) reads the union of every workspace's set.
-func readManagedSet(dir, ws string) map[int]bool {
-	out := map[int]bool{}
-	data, err := os.ReadFile(filepath.Join(dir, "managed.json"))
-	if err != nil {
-		return out
-	}
-	var doc map[string][]int
-	if json.Unmarshal(data, &doc) != nil {
-		return out
-	}
-	if ws != "" {
-		for _, id := range doc[ws] {
-			out[id] = true
-		}
-		return out
-	}
-	for _, ids := range doc {
-		for _, id := range ids {
-			out[id] = true
-		}
-	}
-	return out
-}
-
-// ManagedAgent is one supervised pane joined with its live state.
-type ManagedAgent struct {
+// AgentInfo is one agent pane with its live state.
+type AgentInfo struct {
 	PaneID    int    `json:"pane_id"`
 	Agent     string `json:"agent,omitempty"`
 	State     string `json:"state"`
@@ -97,19 +72,52 @@ type ManagedAgent struct {
 	Timestamp int64  `json:"ts,omitempty"`
 }
 
-// managedSnapshot joins the managed set with live state. Managed panes without a state file
-// yet are reported as state "unknown" so the orchestrator still sees them.
-func managedSnapshot(cfg *Config) []ManagedAgent {
-	dir := nsDir(cfg)
-	states := readAgentStates(dir)
-	managed := readManagedSet(dir, cfg.Workspace)
-	out := make([]ManagedAgent, 0, len(managed))
-	for pid := range managed {
-		a := ManagedAgent{PaneID: pid, State: "unknown"}
-		if st, ok := states[pid]; ok {
-			a.Agent, a.State, a.SessionID, a.Timestamp = st.Agent, st.State, st.SessionID, st.Timestamp
+// agentsSnapshot returns every live agent pane (one per state file) with its state. The manager
+// scopes to its own workspace by cross-referencing list_panes; it then decides which panes to
+// manage (its own spawned tabs and/or existing ones).
+func agentsSnapshot(cfg *Config) []AgentInfo {
+	states := readAgentStates(nsDir(cfg))
+	out := make([]AgentInfo, 0, len(states))
+	for _, st := range states {
+		out = append(out, AgentInfo{
+			PaneID: st.PaneID, Agent: st.Agent, State: st.State, SessionID: st.SessionID, Timestamp: st.Timestamp,
+		})
+	}
+	return out
+}
+
+var intRunRe = regexp.MustCompile(`\d+`)
+
+// scopeIDs parses the optional pane_ids argument into a set, so the manager watches only the panes
+// it chose to manage (no noise/load from unrelated agents). Returns nil (= no filter, all agents)
+// when the argument is absent or empty. Lenient: accepts "11,13", "[11, 13]", etc.
+func scopeIDs(req mcp.CallToolRequest) map[int]bool {
+	s := req.GetString("pane_ids", "")
+	if strings.TrimSpace(s) == "" {
+		return nil
+	}
+	out := map[int]bool{}
+	for _, m := range intRunRe.FindAllString(s, -1) {
+		if n, err := strconv.Atoi(m); err == nil {
+			out[n] = true
 		}
-		out = append(out, a)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// scopeSnaps returns m unchanged when ids is nil, else only the entries whose pane id is in ids.
+func scopeSnaps(m map[int]paneSnap, ids map[int]bool) map[int]paneSnap {
+	if ids == nil {
+		return m
+	}
+	out := make(map[int]paneSnap, len(ids))
+	for id := range ids {
+		if v, ok := m[id]; ok {
+			out[id] = v
+		}
 	}
 	return out
 }
@@ -120,31 +128,25 @@ type paneSnap struct {
 	agent string
 }
 
-func managedStates(cfg *Config) map[int]paneSnap {
-	dir := nsDir(cfg)
-	states := readAgentStates(dir)
-	managed := readManagedSet(dir, cfg.Workspace)
-	out := make(map[int]paneSnap, len(managed))
-	for pid := range managed {
-		snap := paneSnap{state: "unknown"}
-		if st, ok := states[pid]; ok {
-			snap.state, snap.agent = st.State, st.Agent
-		}
-		out[pid] = snap
+func agentStates(cfg *Config) map[int]paneSnap {
+	states := readAgentStates(nsDir(cfg))
+	out := make(map[int]paneSnap, len(states))
+	for id, st := range states {
+		out[id] = paneSnap{state: st.State, agent: st.Agent}
 	}
 	return out
 }
 
-// EventChange is one detected transition for a managed pane.
+// EventChange is one detected transition for an agent pane.
 type EventChange struct {
 	PaneID    int    `json:"pane_id"`
 	Agent     string `json:"agent,omitempty"`
-	State     string `json:"state"`                // "" when the pane left the managed set / closed
-	PrevState string `json:"prev_state,omitempty"` // "" when newly managed
+	State     string `json:"state"`                // "" when the pane's state file disappeared (closed)
+	PrevState string `json:"prev_state,omitempty"` // "" when newly seen
 }
 
-// diffStates compares the previous and current managed-pane state maps. A pane that appeared
-// (newly managed), disappeared (unmanaged/closed), or changed state yields one change.
+// diffStates compares the previous and current agent state maps. A pane that appeared
+// (new agent), disappeared (closed), or changed state yields one change.
 func diffStates(prev, cur map[int]paneSnap) []EventChange {
 	var changes []EventChange
 	for pid, c := range cur {
@@ -164,11 +166,11 @@ func diffStates(prev, cur map[int]paneSnap) []EventChange {
 }
 
 // watcher holds the in-memory baseline for wait_for_event. The MCP server is 1:1 with the
-// orchestrator session over stdio, so a single baseline (guarded by a mutex) is correct and
-// lets the next call catch any change that happened while the orchestrator was reasoning.
+// manager session over stdio, so a single baseline (guarded by a mutex) is correct and lets
+// the next call catch any change that happened while the manager was reasoning.
 type watcher struct {
 	mu       sync.Mutex
-	baseline map[int]paneSnap // nil on the first call: it returns the current managed set as the initial events, then tracks deltas
+	baseline map[int]paneSnap // nil on the first call: it returns the current agents as the initial events, then tracks deltas
 }
 
 const (
@@ -185,12 +187,27 @@ func registerWatchTools(s *server.MCPServer, cfg *Config) {
 			mcp.WithReadOnlyHintAnnotation(true),
 			mcp.WithDestructiveHintAnnotation(false),
 			mcp.WithOpenWorldHintAnnotation(false),
-			mcp.WithDescription("Snapshot of supervised (managed) agents joined with their live state. "+
-				"Managed panes are toggled by the human in the WezTerm command center (司令塔)."),
+			mcp.WithDescription("Snapshot of agent panes with their live state. Without pane_ids, returns every agent "+
+				"(use this to survey and decide which to manage). With pane_ids, returns only those — scope to the set you "+
+				"chose so the result stays focused. The manager scopes to its own workspace via list_panes."),
+			mcp.WithString("pane_ids",
+				mcp.Description("Optional comma-separated pane ids to limit the snapshot to (e.g. \"11,13\"). Omit for all agents."),
+			),
 		),
 		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			ids := scopeIDs(req)
+			agents := agentsSnapshot(cfg)
+			if ids != nil {
+				kept := agents[:0]
+				for _, a := range agents {
+					if ids[a.PaneID] {
+						kept = append(kept, a)
+					}
+				}
+				agents = kept
+			}
 			// structuredContent must be a JSON object, not a top-level array, so wrap the list.
-			return mcp.NewToolResultJSON(map[string]any{"agents": managedSnapshot(cfg)})
+			return mcp.NewToolResultJSON(map[string]any{"agents": agents})
 		},
 	)
 
@@ -199,15 +216,19 @@ func registerWatchTools(s *server.MCPServer, cfg *Config) {
 			mcp.WithReadOnlyHintAnnotation(true),
 			mcp.WithDestructiveHintAnnotation(false),
 			mcp.WithOpenWorldHintAnnotation(false),
-			mcp.WithDescription("Block until a supervised agent changes state (or the managed set changes), "+
-				"then return the deltas. Returns immediately if changes already happened since the last call, "+
-				"so nothing is missed while the orchestrator reasons. Returns timed_out=true with no changes "+
-				"after timeout_seconds so the caller can simply call again to keep watching."),
+			mcp.WithDescription("Block until a watched agent pane changes state (or appears/closes), then return the deltas. "+
+				"Pass pane_ids to watch ONLY the panes you manage — you are woken only for those, with no noise from other "+
+				"agents. Returns immediately if a watched change already happened since the last call, so nothing is missed "+
+				"while you reason. Returns timed_out=true with no changes after timeout_seconds so the caller can call again."),
+			mcp.WithString("pane_ids",
+				mcp.Description("Optional comma-separated pane ids to watch (e.g. \"11,13\"). Omit to watch every agent."),
+			),
 			mcp.WithInteger("timeout_seconds",
 				mcp.Description("Max seconds to block before returning timed_out. Default 50, max 300."),
 			),
 		),
 		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			ids := scopeIDs(req)
 			timeout := req.GetInt("timeout_seconds", defaultWaitTimeout)
 			if timeout < 1 {
 				timeout = 1
@@ -218,9 +239,10 @@ func registerWatchTools(s *server.MCPServer, cfg *Config) {
 			deadline := time.Now().Add(time.Duration(timeout) * time.Second)
 
 			for {
-				cur := managedStates(cfg)
+				cur := agentStates(cfg)
 				w.mu.Lock()
-				changes := diffStates(w.baseline, cur)
+				// baseline tracks all agents; we only report (and block on) the requested subset.
+				changes := diffStates(scopeSnaps(w.baseline, ids), scopeSnaps(cur, ids))
 				if len(changes) > 0 {
 					w.baseline = cur
 					w.mu.Unlock()

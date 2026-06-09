@@ -65,10 +65,10 @@ function M.format_tab_title(tab, deps, max_width, num_tabs)
   local theme = deps.opts.ui.tab_title
   local icon, icon_color, st = pane_agent_info(tab.active_pane.pane_id, deps)
   if st == "idle" then icon = nil end
-  -- 監督オーケストレーターのタブはアイコンと色を専用のものへ上書きし、一目で見分けられるようにする。
-  if deps.managed and deps.managed.is_orchestrator(deps.opts.orchestrator_file, tab.active_pane.pane_id) then
-    icon = (deps.opts.icons and deps.opts.icons.orchestrator) or icon
-    icon_color = theme.orchestrator_fg
+  -- 受付マネージャーのタブはアイコンと色を専用のものへ上書きし、一目で見分けられるようにする。
+  if deps.manager and deps.manager.is_manager(deps.opts.manager_file, tab.active_pane.pane_id) then
+    icon = (deps.opts.icons and deps.opts.icons.manager) or icon
+    icon_color = theme.manager_fg
   end
   icon = icon or ""
   local full = tab.active_pane.title or ""

@@ -1,0 +1,10 @@
+# gemini マネージャーの決定的起動コマンド。WezTerm プラグインが召喚 (CMD+SHIFT+M) でこの
+# /manager を起動して呼ぶ。手順そのものは共有スキル manager (この extension が skills/ で提供)
+# に一元化し、ここでは「そのスキルに従って始めよ」と指示するだけにする
+# (claude の /wezterm-ai-agents:manager・codex の $manager と同じ役割)。
+description = "WezTerm のワークスペース受付マネージャーを開始する"
+prompt = """
+あなたはこのセッションで WezTerm のワークスペース受付マネージャーになる。
+この extension が提供する `manager` スキルの手順に厳密に従って動作せよ。
+まず list_panes で自分のワークスペースを把握し、人間の相談を受けてタスクをタブへ委譲すること。
+"""
