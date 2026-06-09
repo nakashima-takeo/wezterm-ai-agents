@@ -64,10 +64,30 @@ local function spawn_manager(window, pane, deps, ws)
     })
     return p
   end)
-  if not ok or not new_pane then return end
+  -- 失敗は握り潰さず通知する (無反応だと「召喚しても何も起きない」になり原因が掴めないため)。
+  if not ok or not new_pane then
+    if deps.diagnostics then
+      deps.diagnostics.report("manager_spawn_failed", "マネージャーの起動に失敗しました: " .. tostring(new_pane))
+    end
+    return
+  end
   deps.manager.write(opts.manager_file, ws, new_pane:pane_id())
   -- 最左へ寄せて定位置にする。召喚なので新タブのフォーカスはそのまま (人間がここで相談する)。
   pcall(function() window:perform_action(act.MoveTab(0), pane) end)
+end
+
+-- pane_id が今も生きているか。mux の全ペインを列挙して権威的に判定し、生きていればその MuxPane を返す。
+-- wezterm.mux.get_pane は閉じたペインに nil を返さないことがあり、それに依存すると「閉じた manager を
+-- 生存と誤判定 → 再起動されない」不具合になるため、列挙で確実に確かめる。
+local function alive_pane(pane_id)
+  for _, win in ipairs(wezterm.mux.all_windows()) do
+    for _, tab in ipairs(win:tabs()) do
+      for _, p in ipairs(tab:panes()) do
+        if p:pane_id() == pane_id then return p end
+      end
+    end
+  end
+  return nil
 end
 
 -- 現在のワークスペースの manager を呼び出す。居れば前面化、居なければ起動。
@@ -75,12 +95,10 @@ function M.summon(window, pane, deps)
   local opts = deps.opts
   local ws = window:active_workspace()
   local existing = deps.manager.read(opts.manager_file, ws)
-  if existing then
-    local p = wezterm.mux.get_pane(existing)
-    if p then
-      pcall(function() p:activate() end)
-      return
-    end
+  local p = existing and alive_pane(existing)
+  if p then
+    pcall(function() p:activate() end)
+    return
   end
   spawn_manager(window, pane, deps, ws)
 end

@@ -358,6 +358,7 @@ function M.apply(config, user_opts)
     ui = ui,
     editor = editor,
     manager = manager,
+    diagnostics = diagnostics,
     opts = opts,
   }
   M.deps = deps

@@ -57,23 +57,55 @@ end)
 
 H.section("manager: summon")
 
-H.test("既存のマネージャーが居れば前面化し再起動しない", function()
+H.test("生きている manager が居れば前面化し再起動しない", function()
   local activated = false
-  local orig = wezterm.mux.get_pane
-  wezterm.mux.get_pane = function(id)
-    if id == 5 then return { activate = function() activated = true end } end
-  end
+  local pane5 = { pane_id = function() return 5 end, activate = function() activated = true end }
+  local win = {
+    tabs = function()
+      return { { panes = function() return { pane5 } end } }
+    end,
+  }
+  local orig = wezterm.mux.all_windows
+  wezterm.mux.all_windows = function() return { win } end
   -- mux_window を呼んだら spawn 経路に入った証拠 (existing 経路では到達しない)。
   local window = {
     active_workspace = function() return "a" end,
-    mux_window = function() error("should not spawn when a manager already exists") end,
+    mux_window = function() error("should not spawn when a live manager already exists") end,
   }
   local deps = { opts = { manager_file = "m" }, manager = { read = function() return 5 end } }
 
   local ok = pcall(mgr.summon, window, {}, deps)
-  wezterm.mux.get_pane = orig
+  wezterm.mux.all_windows = orig
   H.assert_true(ok, "例外なく前面化する")
   H.assert_true(activated, "既存ペインが activate された")
+end)
+
+-- 退行防止: 記録された manager ペインが既に閉じている (mux に居ない) なら、再起動を試みる。
+-- get_pane の「閉じたペインに nil を返さない」挙動に依存していた頃は、これが誤って前面化に倒れて
+-- 永久に再作成されなかった。
+H.test("記録された manager が死んでいれば再起動を試みる", function()
+  local spawn_reached = false
+  local orig = wezterm.mux.all_windows
+  wezterm.mux.all_windows = function() return {} end -- pane 5 はもう mux に居ない
+  local window = {
+    active_workspace = function() return "a" end,
+    mux_window = function()
+      spawn_reached = true
+      error("stop here")
+    end,
+  }
+  local deps = {
+    opts = { manager_file = "m", manager_agent = "claude", manager_command = "claude", status_dir = "/s" },
+    manager = { read = function() return 5 end, write = function() end },
+    workspace = { get_cwd_path = function() return nil end },
+    agent = { shell_quote = function(s) return s end },
+    diagnostics = { report = function() end },
+  }
+
+  local ok = pcall(mgr.summon, window, {}, deps)
+  wezterm.mux.all_windows = orig
+  H.assert_true(ok, "例外なく進む (spawn 失敗は diagnostics へ)")
+  H.assert_true(spawn_reached, "死んだ記録では spawn 経路に到達する")
 end)
 
 H.section("manager state: per-workspace pane tracking")
